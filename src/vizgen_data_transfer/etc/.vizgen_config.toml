@@ -1,0 +1,54 @@
+# Configuration file for Vizgen data transfer
+# This file contains the configuration for the Vizgen data transfer script.
+# It includes the paths for the analysis drive, Isilon drive, and email configuration.
+
+# ------------------------------- #
+# Main Instrument drive locations #
+# ------------------------------- #
+# Analysis drive on Instrument - Z:
+analysis_drive_pc = "Z:\\"
+# Isilon drive to transfer data from Instrument- F:
+isilon_drive_pc = "F:\\"
+# Analysis drive on external disk - G:\Vizgen data Z drive
+analysis_drive_pc_disk = "G:\\Vizgen data Z drive"
+
+# --------------------------------- #
+# Development locations for testing #
+# --------------------------------- #
+# Analysis drive for debug - F:\test_data
+analysis_drive_pc_debug = "F:\\test_data"
+# Isilon Analysis drive for testing
+analysis_drive_nix = "/ei/cb/development/kaithakg/vizgen/test_data"
+# Isilon drive for testing - "/ei/cb/development/kaithakg/vizgen"
+isilon_drive_nix = "/ei/cb/development/kaithakg/vizgen"
+
+# ------------------- #
+# Email configuration #
+# ------------------- #
+# Email configuration
+smtp_server = "smtp.example.com"
+sender_email = "user@example.co.uk"
+
+# Email addresses for production
+[production]
+addressees = [
+    "first.user@example_account.ac.uk",
+  ]
+
+# Email addresses for development
+[development]
+addressees = [
+    "first.user@example_account.ac.uk",
+    "second.user@example_account.ac.uk"
+  ]
+
+# ------------ #
+# Tool options #
+# ------------ #
+[tool.options]
+# rsync options
+# - please do not pass in --log-file option here
+rsync = "-av"
+# robocopy options
+# - please do not pass in /MT and /LOG options here
+robocopy = "/Z /E /J"

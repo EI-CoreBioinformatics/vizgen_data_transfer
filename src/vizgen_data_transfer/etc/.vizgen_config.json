@@ -1,0 +1,8 @@
+{
+  "smtp_server": "smtp.example.com",
+  "sender_email": "user@example.co.uk",
+  "addressees": [
+    "first.user@example_account.ac.uk",
+    "second.user@example_account.ac.uk"
+  ]
+}
