@@ -510,7 +510,7 @@ def main():
     parser.add_argument(
         "--disk",
         action="store_true",
-        help="Enable this option if run has to be copied from the Windows external Hard disk 'G:\Vizgen data Z drive' instead of the default Z: Drive on the analysis machine [default:%(default)s]",
+        help="Enable this option if run has to be copied from the Windows external Hard disk 'G:\\Vizgen data Z drive' instead of the default Z: Drive on the analysis machine [default:%(default)s]",
     )
     parser.add_argument(
         "--debug",
