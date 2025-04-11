@@ -6,7 +6,7 @@ This repository contains tools and scripts for managing data transfer processes 
 ## Prerequisites
 
 From Windows:
-- Default Windows Python version
+- Default Windows Python version (Tested on Python 3.9.13)
 
 From Linux (for testing/debugging):
 - Python 3.11 or higher
