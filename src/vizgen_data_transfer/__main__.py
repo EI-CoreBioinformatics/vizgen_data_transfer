@@ -21,7 +21,11 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import importlib.resources
-import tomllib
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 # get script name
 script = os.path.basename(sys.argv[0])
@@ -29,9 +33,14 @@ executed_command = " ".join(sys.argv)
 # add python prefix to executed command
 executed_command = "python " + executed_command
 
-default_vizgen_config = importlib.resources.files("vizgen_data_transfer.etc").joinpath(
-    ".vizgen_config.toml"
-)
+# In Windows, the default_vizgen_config is expected to be located the working directory, which can be overridden by providing the path to the config file using the --vizgen_config option.
+default_vizgen_config = str()
+if platform.system().lower() == "windows":
+    default_vizgen_config = os.path.join(os.getcwd(), ".vizgen_config.toml")
+else:
+    default_vizgen_config = importlib.resources.files(
+        "vizgen_data_transfer.etc"
+    ).joinpath(".vizgen_config.toml")
 
 logging.basicConfig(
     format="%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s",
