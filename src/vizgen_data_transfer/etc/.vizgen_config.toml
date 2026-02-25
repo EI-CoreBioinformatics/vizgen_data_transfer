@@ -7,16 +7,16 @@
 # ------------------------------- #
 # Analysis drive on Instrument - Z:
 analysis_drive_pc = "Z:\\"
-# Isilon drive to transfer data from Instrument- F:
-isilon_drive_pc = "F:\\"
+# Isilon drive to transfer data from Instrument- L:
+isilon_drive_pc = "L:\\"
 # Analysis drive on external disk - G:\Vizgen data Z drive
 analysis_drive_pc_disk = "G:\\Vizgen data Z drive"
 
 # --------------------------------- #
 # Development locations for testing #
 # --------------------------------- #
-# Analysis drive for debug - F:\test_data
-analysis_drive_pc_debug = "F:\\test_data"
+# Analysis drive for debug - L:\test_data
+analysis_drive_pc_debug = "L:\\test_data"
 # Isilon Analysis drive for testing
 analysis_drive_nix = "/ei/cb/development/kaithakg/vizgen/test_data"
 # Isilon drive for testing - "/ei/cb/development/kaithakg/vizgen"
