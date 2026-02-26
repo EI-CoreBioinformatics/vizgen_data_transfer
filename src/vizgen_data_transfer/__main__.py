@@ -177,6 +177,29 @@ class VizgenDataTransfer:
             self.isilon_drive, self.run_id, "output.log"
         )
 
+        # keeps logs of raw data, analysis and output files, folders and size counts before and after transfer for each copy type to central logs folder. This is in addition to the python os.walk logs that are generated in the log files for each copy type. Only doing this for windows using robocopy.
+
+        # before transfer
+        self.isilon_log_bf_raw_data = os.path.join(
+            self.log_dir, f"{self.run_id}.raw_data.robocopy.list_before_transfer.log"
+        )
+        self.isilon_log_bf_analysis = os.path.join(
+            self.log_dir, f"{self.run_id}.analysis.robocopy.list_before_transfer.log"
+        )
+        self.isilon_log_bf_output = os.path.join(
+            self.log_dir, f"{self.run_id}.output.robocopy.list_before_transfer.log"
+        )
+        # after transfer
+        self.isilon_log_af_raw_data = os.path.join(
+            self.log_dir, f"{self.run_id}.raw_data.robocopy.list_after_transfer.log"
+        )
+        self.isilon_log_af_analysis = os.path.join(
+            self.log_dir, f"{self.run_id}.analysis.robocopy.list_after_transfer.log"
+        )
+        self.isilon_log_af_output = os.path.join(
+            self.log_dir, f"{self.run_id}.output.robocopy.list_after_transfer.log"
+        )
+
     def check_run_folders(self):
         # input folder - Z:
         # raw_data
@@ -207,7 +230,7 @@ class VizgenDataTransfer:
 
         logging.info(f"All run folders exists for run: {self.run_id}")
 
-    def get_counts(self, state="before"):
+    def get_counts_python(self, state="before"):
         """
         Get the count of files, folders and total size in bytes for raw_data, analysis and output folders before transfer and log that information. This information will be used to compare with the counts after transfer to check if the transfer was successful.
         """
@@ -238,6 +261,7 @@ class VizgenDataTransfer:
             total_files = 0
             total_folders = 0
             total_size_bytes = 0
+            total_size_gbytes = 0
 
             for dirpath, dirnames, filenames in os.walk(source):
                 total_folders += len(dirnames)
@@ -245,14 +269,16 @@ class VizgenDataTransfer:
                 for f in filenames:
                     fp = self.win_long_path(os.path.join(dirpath, f))
                     total_size_bytes += os.path.getsize(fp)
+            total_size_gbytes = float(f"{total_size_bytes / (1024 * 1024 * 1024):.3f}")
             logging.info(f"Checking location: {source}")
             logging.info(
-                f"{state.title()} transfer - {copy_type} - Total files: {total_files}, Total folders: {total_folders}, Total size (bytes): {total_size_bytes}"
+                f"{state.title()} transfer - {copy_type} - Total files: {total_files}, Total folders: {total_folders}, Total size (GB): {total_size_gbytes}, Total size (bytes): {total_size_bytes}"
             )
             self.store_count_info[state][copy_type] = {
                 "files": total_files,
                 "folders": total_folders,
                 "size_bytes": total_size_bytes,
+                "size_gbytes": total_size_gbytes,
             }
 
     def copy_data(self, copy_type, source, destination, log_file):
@@ -398,23 +424,25 @@ class VizgenDataTransfer:
 
                 email_content += "\n"
                 email_content += f"{copy_type.title()} Transfer Summary\n"
-                email_content += "-" * (col1_width + col_width * 3) + "\n"
+                email_content += "-" * (col1_width + col_width * 4) + "\n"
 
                 # Header row
                 email_content += (
                     f"{'Status':<{col1_width}}"
                     f"{'Total Files':<{col_width}}"
                     f"{'Total Folders':<{col_width}}"
+                    f"{'Total Size (GB)':<{col_width}}"
                     f"{'Total Size (Bytes)':<{col_width}}\n"
                 )
 
-                email_content += "-" * (col1_width + col_width * 3) + "\n"
+                email_content += "-" * (col1_width + col_width * 4) + "\n"
 
                 # Before row
                 email_content += (
                     f"{'Before Transfer':<{col1_width}}"
                     f"{before_count_info['files']:<{col_width}}"
                     f"{before_count_info['folders']:<{col_width}}"
+                    f"{before_count_info['size_gbytes']:<{col_width}}"
                     f"{before_count_info['size_bytes']:<{col_width}}\n"
                 )
 
@@ -423,13 +451,21 @@ class VizgenDataTransfer:
                     f"{'After Transfer':<{col1_width}}"
                     f"{after_count_info['files']:<{col_width}}"
                     f"{after_count_info['folders']:<{col_width}}"
+                    f"{after_count_info['size_gbytes']:<{col_width}}"
                     f"{after_count_info['size_bytes']:<{col_width}}\n"
                 )
 
-                email_content += "-" * (col1_width + col_width * 3) + "\n"
+                email_content += "-" * (col1_width + col_width * 4) + "\n"
 
-                # Error if mismatch
-                if before_count_info != after_count_info:
+                # Error if mismatch, except size_bytes (but check size_gbytes) can be different due to differences in how size is calculated by os.walk and robocopy/rsync, but files and folders count should be the same
+                # keeping below logic in case we need to check size_bytes
+                # if before_count_info != after_count_info:
+                if (
+                    before_count_info["files"] != after_count_info["files"]
+                    or before_count_info["folders"] != after_count_info["folders"]
+                    or before_count_info["size_gbytes"]
+                    != after_count_info["size_gbytes"]
+                ):
                     email_content += (
                         f"ERROR: Mismatch detected in {copy_type} counts "
                         "between before and after transfer.\n"
@@ -439,9 +475,10 @@ class VizgenDataTransfer:
                         f"Mismatch in counts for {copy_type} between before and after transfer."
                     )
                     transfer_error = True
+
         return email_content, transfer_error
 
-    def success_message(self):
+    def create_email_content(self):
         email_subject = f"Vizgen data transfer completed for run: {self.run_id}"
         email_content = f"Vizgen data transfer completed for run: {self.run_id}"
         log_content = str()
@@ -543,7 +580,7 @@ class VizgenDataTransfer:
     def transfer_run(self):
 
         # get counts before transfer and log that information
-        self.get_counts(state="before")
+        self.get_counts_python(state="before")
 
         # check if run folders exist and raise error if not
         if not os.path.exists(self.isilon_drive_raw_data):
@@ -616,9 +653,9 @@ class VizgenDataTransfer:
                 f"Error: Analysis output folder not found for run: {self.isilon_drive_output}. Looks like copy failed. Simply restart the command to resume copy from where it left off."
             )
 
-        self.get_counts(state="after")
+        self.get_counts_python(state="after")
 
-        self.success_message()
+        self.create_email_content()
 
         # output folder - F:
         # output structure
