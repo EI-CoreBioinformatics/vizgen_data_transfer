@@ -504,7 +504,7 @@ def main():
     # add threads option
     parser.add_argument(
         "--threads",
-        default=8,
+        default=1,
         help="Number of threads to use for copying",
     )
     parser.add_argument(
