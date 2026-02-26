@@ -21,6 +21,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import importlib.resources
+from collections import defaultdict
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -67,6 +68,12 @@ class VizgenDataTransfer:
         system_name = platform.system()
         return system_name.lower()
 
+    @staticmethod
+    def win_long_path(path):
+        if os.name == "nt":
+            return "\\\\?\\" + os.path.abspath(path)
+        return path
+
     def __init__(self, args):
         self.args = args
         self.run_id = args.run_id
@@ -76,6 +83,7 @@ class VizgenDataTransfer:
         self.debug = args.debug
 
         self.store_copy_returns = dict()
+        self.store_count_info = defaultdict(dict)
 
         self.analysis_drive = None
         self.isilon_drive = None
@@ -182,6 +190,54 @@ class VizgenDataTransfer:
 
         logging.info(f"All run folders exists for run: {self.run_id}")
 
+    def get_counts(self, state="before"):
+        """
+        Get the count of files, folders and total size in bytes for raw_data, analysis and output folders before transfer and log that information. This information will be used to compare with the counts after transfer to check if the transfer was successful.
+        """
+        for copy_type in self.copy_type:
+            source = None
+            if copy_type == "raw_data":
+                source = (
+                    self.analysis_drive_raw_data
+                    if state == "before"
+                    else self.isilon_drive_raw_data
+                )
+            elif copy_type == "analysis":
+                source = (
+                    self.analysis_drive_analysis
+                    if state == "before"
+                    else self.isilon_drive_analysis
+                )
+            elif copy_type == "output":
+                source = (
+                    self.analysis_drive_output
+                    if state == "before"
+                    else self.isilon_drive_output
+                )
+            else:
+                logging.warning(f"Unknown copy type: {copy_type}")
+                continue
+
+            total_files = 0
+            total_folders = 0
+            total_size_bytes = 0
+
+            for dirpath, dirnames, filenames in os.walk(source):
+                total_folders += len(dirnames)
+                total_files += len(filenames)
+                for f in filenames:
+                    fp = self.win_long_path(os.path.join(dirpath, f))
+                    total_size_bytes += os.path.getsize(fp)
+            logging.info(f"Checking location: {source}")
+            logging.info(
+                f"{state.title()} transfer - {copy_type} - Total files: {total_files}, Total folders: {total_folders}, Total size (bytes): {total_size_bytes}"
+            )
+            self.store_count_info[state][copy_type] = {
+                "files": total_files,
+                "folders": total_folders,
+                "size_bytes": total_size_bytes,
+            }
+
     def copy_data(self, copy_type, source, destination, log_file):
         # robocopy command used:
         # robocopy
@@ -192,9 +248,9 @@ class VizgenDataTransfer:
         # /log+ - Writes the status output to the log file (overwrites the existing log file).
         cmd = None
         if self.os_name == "linux":
-            cmd = f"rsync {self.tool_options} --log-file={log_file} {source} {destination}"
+            cmd = f"rsync {self.tool_options} --log-file={log_file} {source}/* {destination}"
         if self.os_name == "windows":
-            cmd = f'robocopy "{source} " {destination} {self.tool_options} /MT:{self.threads} /LOG+:{log_file}'
+            cmd = f'robocopy "{source}" "{destination}" {self.tool_options} /MT:{self.threads} /LOG+:{log_file}'
 
         logging.info(f"Command: {cmd}")
 
@@ -303,10 +359,74 @@ class VizgenDataTransfer:
         else:
             return "NOT A COMPLETE LOG FILE. PLEASE RE-RUN THE COMMAND TO GET A COMPLETE LOG FILE."
 
+    def get_transfer_summary(self):
+        """
+        Get the summary of the transfer including the data locations, counts of files, folders and total size in bytes for each copy type before and after transfer, and the exit code(s) for each copy type. This information will be included in the success email sent after the transfer is complete.
+        """
+        email_content = str()
+        transfer_error = False
+        for copy_type in self.copy_type:
+            if (
+                copy_type in self.store_count_info["before"]
+                and copy_type in self.store_count_info["after"]
+            ):
+                before_count_info = self.store_count_info["before"][copy_type]
+                after_count_info = self.store_count_info["after"][copy_type]
+
+                # Column formatting widths
+                col1_width = 16
+                col_width = 18
+
+                email_content += "\n"
+                email_content += f"{copy_type.title()} Transfer Summary\n"
+                email_content += "-" * (col1_width + col_width * 3) + "\n"
+
+                # Header row
+                email_content += (
+                    f"{'Status':<{col1_width}}"
+                    f"{'Total Files':<{col_width}}"
+                    f"{'Total Folders':<{col_width}}"
+                    f"{'Total Size (Bytes)':<{col_width}}\n"
+                )
+
+                email_content += "-" * (col1_width + col_width * 3) + "\n"
+
+                # Before row
+                email_content += (
+                    f"{'Before Transfer':<{col1_width}}"
+                    f"{before_count_info['files']:<{col_width}}"
+                    f"{before_count_info['folders']:<{col_width}}"
+                    f"{before_count_info['size_bytes']:<{col_width}}\n"
+                )
+
+                # After row
+                email_content += (
+                    f"{'After Transfer':<{col1_width}}"
+                    f"{after_count_info['files']:<{col_width}}"
+                    f"{after_count_info['folders']:<{col_width}}"
+                    f"{after_count_info['size_bytes']:<{col_width}}\n"
+                )
+
+                email_content += "-" * (col1_width + col_width * 3) + "\n"
+
+                # Error if mismatch
+                if before_count_info != after_count_info:
+                    email_content += (
+                        f"ERROR: Mismatch detected in {copy_type} counts "
+                        "between before and after transfer.\n"
+                        "Please try re-running the transfer command.\n"
+                    )
+                    logging.error(
+                        f"Mismatch in counts for {copy_type} between before and after transfer."
+                    )
+                    transfer_error = True
+        return email_content, transfer_error
+
     def success_message(self):
         email_subject = f"Vizgen data transfer completed for run: {self.run_id}"
         email_content = f"Vizgen data transfer completed for run: {self.run_id}"
         log_content = str()
+        email_content += "\n\nData location(s):\n"
         logging.info(f"Vizgen data transfer completed for run: {self.run_id}")
         if "raw_data" in self.copy_type:
             email_content += f"\n - Raw directory: {self.isilon_drive_raw_data}"
@@ -320,13 +440,23 @@ class VizgenDataTransfer:
             email_content += f"\n - Output directory: {self.isilon_drive_output}"
             logging.info(f"Output directory: {self.isilon_drive_output}")
             log_content += f"\n - Output directory: {self.check_log_file(self.isilon_drive_output_log)}"
+
+        email_content += "\n\nData summary:\n"
+        # email_content += self.get_transfer_summary()
+        summary_content, transfer_error = self.get_transfer_summary()
+        email_content += summary_content
+        if transfer_error:
+            email_subject = email_subject.replace("completed", "failed")
+            email_content = email_content.replace("completed", "failed")
+
         # Add platform-specific message
+        email_content += "\n\nExit code(s):\n"
         platform_msg = (
             "Any exit code value equal to or greater than 8 indicates that there was at least one failure during the robocopy operation."
             if self.os_name == "windows"
             else "Any non-zero exit code indicates that there was at least one failure during the rsync copy operation."
         )
-        email_content += f"\n\nNote: {platform_msg}\n"
+        email_content += f"\nNote: {platform_msg}\n"
         logging.warning(f"Note: {platform_msg}")
         if "raw_data" in self.copy_type:
             if "raw_data" in self.store_copy_returns:
@@ -349,7 +479,7 @@ class VizgenDataTransfer:
                 )
                 logging.info(f"Output directory: {self.store_copy_returns['output']}")
         if log_content:
-            email_content += f"\n\n\nLog file status:\n{log_content}"
+            email_content += f"\n\nLog file status:\n{log_content}"
 
             # change email_subject completed to failed if NOT A COMPLETE LOG FILE detected in log_content
             if "NOT A COMPLETE LOG FILE" in log_content:
@@ -388,6 +518,10 @@ class VizgenDataTransfer:
             logging.error("Email delivery failed")
 
     def transfer_run(self):
+
+        # get counts before transfer and log that information
+        self.get_counts(state="before")
+
         # check if run folders exist and raise error if not
         if not os.path.exists(self.isilon_drive_raw_data):
             logging.info(
@@ -458,6 +592,8 @@ class VizgenDataTransfer:
             raise ValueError(
                 f"Error: Analysis output folder not found for run: {self.isilon_drive_output}. Looks like copy failed. Simply restart the command to resume copy from where it left off."
             )
+
+        self.get_counts(state="after")
 
         self.success_message()
 
