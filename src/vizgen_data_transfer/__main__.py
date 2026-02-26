@@ -49,6 +49,27 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 
+
+def get_operating_system():
+    system_name = platform.system()
+    return system_name.lower()
+
+
+def format_logger(log_file):
+    # create log directory if it does not exist
+    log_dir = os.path.dirname(log_file)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%d-%b-%y %H:%M:%S",
+    )
+    file_handler.setFormatter(formatter)
+    logging.getLogger().addHandler(file_handler)
+
+
 # robocopy exit codes
 # ::: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#exit-return-codes
 robocopy_exit_codes = {
@@ -63,11 +84,6 @@ robocopy_exit_codes = {
 
 
 class VizgenDataTransfer:
-    @staticmethod
-    def get_operating_system():
-        system_name = platform.system()
-        return system_name.lower()
-
     @staticmethod
     def win_long_path(path):
         if os.name == "nt":
@@ -87,6 +103,7 @@ class VizgenDataTransfer:
 
         self.analysis_drive = None
         self.isilon_drive = None
+        self.log_dir = None
         self.config = None
         vizgen_config = None
         if args.vizgen_config:
@@ -108,10 +125,9 @@ class VizgenDataTransfer:
 
         self.tool_options = None
         # detect operating system
-        self.os_name = self.get_operating_system()
+        self.os_name = get_operating_system()
         # set analysis drive and isilon drive
         if "windows" in self.os_name:
-            logging.info("Operating System: Windows")
             # set analysis Z: drive or external disk G: drive
             self.analysis_drive = (
                 self.config["analysis_drive_pc_disk"]
@@ -119,13 +135,14 @@ class VizgenDataTransfer:
                 else self.config["analysis_drive_pc"]
             )
             self.isilon_drive = self.config["isilon_drive_pc"]
+            self.log_dir = self.config["isilon_drive_logs_pc"]
             if self.debug:
                 self.analysis_drive = self.config["analysis_drive_pc_debug"]
             self.tool_options = self.config["tool"]["options"]["robocopy"]
         elif "linux" in self.os_name:
-            logging.info("Operating System: Linux")
             self.analysis_drive = self.config["analysis_drive_nix"]
             self.isilon_drive = self.config["isilon_drive_nix"]
+            self.log_dir = self.config["isilon_drive_logs_nix"]
             self.tool_options = self.config["tool"]["options"]["rsync"]
         else:
             raise ValueError("Operating System: Unknown or not currenly supported")
@@ -662,7 +679,40 @@ def main():
         help="Enable this option for debugging [default:%(default)s]",
     )
     args = parser.parse_args()
+
+    # raise error if config file not found
+    try:
+        assert os.path.exists(args.vizgen_config)
+    except AssertionError:
+        logging.error(f"Error: Vizgen config file not found: {args.vizgen_config}")
+        sys.exit(1)
+
+    with open(args.vizgen_config, "rb") as f:
+        config = tomllib.load(f)
+
+    os_name = get_operating_system()
+    # master log file
+    if "windows" in os_name:
+        log_file = os.path.join(config["isilon_drive_logs_pc"], f"{script}.log")
+        format_logger(log_file)
+    elif "linux" in os_name:
+        log_file = os.path.join(config["isilon_drive_logs_nix"], f"{script}.log")
+        format_logger(log_file)
+    else:
+        raise ValueError("Operating System: Unknown or not currenly supported")
+
+    logging.info("######################################")
+    logging.info("### VIZGEN DATA TRANSFER INITIATED ###")
+    logging.info("######################################")
+    logging.info(f"Initiate Vizgen data transfer for run: {args.run_id}")
+    logging.info(f"Operating System: {os_name.title()}")
+
     VizgenDataTransfer(args).run()
+
+    logging.info(f"Finished Vizgen data transfer for run: {args.run_id}")
+    logging.info("######################################")
+    logging.info("### VIZGEN DATA TRANSFER COMPLETED ###")
+    logging.info("######################################")
 
 
 if __name__ == "__main__":
