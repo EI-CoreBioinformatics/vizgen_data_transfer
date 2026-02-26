@@ -113,14 +113,14 @@ class VizgenDataTransfer:
 
         # raise error if config file not found
         try:
-            assert os.path.exists(vizgen_config)
+            assert os.path.exists(str(vizgen_config))
         except AssertionError:
             logging.error(f"Error: Vizgen config file not found: {vizgen_config}")
             sys.exit(1)
 
         logging.info(f"Config file: {vizgen_config}")
 
-        with open(vizgen_config, "rb") as f:
+        with open(str(vizgen_config), "rb") as f:
             self.config = tomllib.load(f)
 
         self.tool_options = None
@@ -266,8 +266,10 @@ class VizgenDataTransfer:
         cmd = None
         if self.os_name == "linux":
             cmd = f"rsync {self.tool_options} --log-file={log_file} {source}/* {destination}"
-        if self.os_name == "windows":
+        elif self.os_name == "windows":
             cmd = f'robocopy "{source}" "{destination}" {self.tool_options} /MT:{self.threads} /LOG+:{log_file}'
+        else:
+            raise ValueError(f"Operating System: '{self.os_name}' currenly supported")
 
         logging.info(f"Command: {cmd}")
 
@@ -507,6 +509,10 @@ class VizgenDataTransfer:
 
     def send_email(self, email_subject, email_content):
         # send email
+
+        if self.config is None:
+            logging.error("Config is not loaded. Cannot send email.")
+            return
 
         smtp_server = self.config["smtp_server"]
         sender_email = self.config["sender_email"]
