@@ -647,7 +647,7 @@ class VizgenDataTransfer:
 
                 email_content += "-" * (col1_width + col_width * 4) + "\n"
 
-                # Error if mismatch, except size_bytes (but check size_gbytes) can be different due to differences in how size is calculated by os.walk and robocopy/rsync, but files and folders count should be the same
+                # Error if mismatch, except size_bytes (but check size_gbytes) can be different due to differences in how size is calculated by os.walk and robocopy, but files, folders count and size_gbytes should be the same
                 # keeping below logic in case we need to check size_bytes
                 # if before_count_info != after_count_info:
                 if (
@@ -713,14 +713,14 @@ class VizgenDataTransfer:
 
                     email_content += "-" * (col1_width + col_width * 4) + "\n"
 
-                    # Error if mismatch, except bytes_g (but check bytes) can be different due to differences in how size is calculated by os.walk and robocopy, but dirs, files and bytes count should be the same
+                    # Error if mismatch occurs, check all values =, i.e., files, folders, size_gbytes and size_bytes should be the same between before and after transfer. During testing, robocopy counts were consistent between before and after transfer.
                     # if (
                     #     before_robocopy_count_info["files"]
                     #     != after_robocopy_count_info["files"]
                     #     or before_robocopy_count_info["folders"]
                     #     != after_robocopy_count_info["folders"]
-                    #     or before_robocopy_count_info["bytes"]
-                    #     != after_robocopy_count_info["bytes"]
+                    #     or before_robocopy_count_info["size_gbytes"]
+                    #     != after_robocopy_count_info["size_gbytes"]
                     # ):
                     if before_robocopy_count_info != after_robocopy_count_info:
                         email_content += (
@@ -758,7 +758,6 @@ class VizgenDataTransfer:
             log_content += f"\n - Output directory: {self.check_log_file(self.isilon_drive_output_log)}"
 
         email_content += "\n\nData summary:"
-        # email_content += self.get_transfer_summary()
         summary_content, transfer_error = self.get_transfer_summary()
         email_content += summary_content
         if transfer_error:
@@ -971,7 +970,7 @@ def main():
     # add threads option
     parser.add_argument(
         "--threads",
-        default=8,
+        default=1,
         help="Number of threads to use for copying",
     )
     parser.add_argument(
