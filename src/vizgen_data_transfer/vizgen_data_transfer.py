@@ -39,14 +39,14 @@ logging.basicConfig(
 analysis_drive_pc = "Z:\\"
 # Analysis drive disk - G:\Vizgen data Z drive
 analysis_drive_pc_disk = "G:\\Vizgen data Z drive"
-# Analysis drive debug - F:\test_data
-analysis_drive_pc_debug = "F:\\test_data"
+# Analysis drive debug - L:\test_data
+analysis_drive_pc_debug = "L:\\test_data"
 # for testing
 analysis_drive_nix = "/ei/cb/development/kaithakg/vizgen/test_data"
 
 
-# Isilon drive - F:
-isilon_drive_pc = "F:\\"
+# Isilon drive - L:
+isilon_drive_pc = "L:\\"
 # for testing
 isilon_drive_nix = "/ei/cb/development/kaithakg/vizgen"
 
@@ -406,7 +406,7 @@ class VizgenDataTransfer:
                 f"Copying raw_data from {self.analysis_drive_raw_data} to {self.isilon_drive_raw_data}"
             )
             # copy raw_data from analysis drive to isilon drive
-            # robocopy Z:\merfish_raw_data\202310261058_VZGEN1_VMSC10202 F:202310261058_VZGEN1_VMSC10202\raw_data /E /MT:8
+            # robocopy Z:\merfish_raw_data\202310261058_VZGEN1_VMSC10202 L:202310261058_VZGEN1_VMSC10202\raw_data /E /MT:8
             self.copy_data(
                 "raw_data",
                 self.analysis_drive_raw_data,
@@ -420,7 +420,7 @@ class VizgenDataTransfer:
                 f"Copying analysis from {self.analysis_drive_analysis} to {self.isilon_drive_analysis}"
             )
             # copy analysis from analysis drive to isilon drive
-            # robocopy Z:\merfish_analysis\202310261058_VZGEN1_VMSC10202 F:202310261058_VZGEN1_VMSC10202\analysis /E /MT:8
+            # robocopy Z:\merfish_analysis\202310261058_VZGEN1_VMSC10202 L:202310261058_VZGEN1_VMSC10202\analysis /E /MT:8
             self.copy_data(
                 "analysis",
                 self.analysis_drive_analysis,
@@ -434,7 +434,7 @@ class VizgenDataTransfer:
                 f"Copying output from {self.analysis_drive_output} to {self.isilon_drive_output}"
             )
             # copy output from analysis drive to isilon drive
-            # robocopy Z:\merfish_output\202310261058_VZGEN1_VMSC10202 F:202310261058_VZGEN1_VMSC10202\output /E /MT:8
+            # robocopy Z:\merfish_output\202310261058_VZGEN1_VMSC10202 L:202310261058_VZGEN1_VMSC10202\output /E /MT:8
             self.copy_data(
                 "output",
                 self.analysis_drive_output,
@@ -458,14 +458,14 @@ class VizgenDataTransfer:
 
         self.success_message()
 
-        # output folder - F:
+        # output folder - L:
         # output structure
         # raw_data
-        # F:202310261058_VZGEN1_VMSC10202\raw_data
+        # L:202310261058_VZGEN1_VMSC10202\raw_data
         # analysis
-        # F:202310261058_VZGEN1_VMSC10202\analysis
+        # L:202310261058_VZGEN1_VMSC10202\analysis
         # output
-        # F:202310261058_VZGEN1_VMSC10202\output
+        # L:202310261058_VZGEN1_VMSC10202\output
 
     def run(self):
         logging.info(f"Processing run: {self.run_id}")
@@ -504,7 +504,7 @@ def main():
     # add threads option
     parser.add_argument(
         "--threads",
-        default=8,
+        default=1,
         help="Number of threads to use for copying",
     )
     parser.add_argument(

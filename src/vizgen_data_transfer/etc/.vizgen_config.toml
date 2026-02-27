@@ -7,20 +7,24 @@
 # ------------------------------- #
 # Analysis drive on Instrument - Z:
 analysis_drive_pc = "Z:\\"
-# Isilon drive to transfer data from Instrument- F:
-isilon_drive_pc = "F:\\"
+# Isilon drive to transfer data from Instrument- L:
+isilon_drive_pc = "L:\\"
+# Isilon drive logs folder - L:\logs
+isilon_drive_logs_pc = "L:\\logs"
 # Analysis drive on external disk - G:\Vizgen data Z drive
 analysis_drive_pc_disk = "G:\\Vizgen data Z drive"
 
 # --------------------------------- #
 # Development locations for testing #
 # --------------------------------- #
-# Analysis drive for debug - F:\test_data
-analysis_drive_pc_debug = "F:\\test_data"
+# Analysis drive for debug - L:\test_data
+analysis_drive_pc_debug = "L:\\test_data"
 # Isilon Analysis drive for testing
 analysis_drive_nix = "/ei/cb/development/kaithakg/vizgen/test_data"
 # Isilon drive for testing - "/ei/cb/development/kaithakg/vizgen"
 isilon_drive_nix = "/ei/cb/development/kaithakg/vizgen"
+# Isilon drive logs folder for testing - "/ei/cb/development/kaithakg/vizgen/logs"
+isilon_drive_logs_nix = "/ei/cb/development/kaithakg/vizgen/logs"
 
 # ------------------- #
 # Email configuration #
@@ -52,3 +56,8 @@ rsync = "-av"
 # robocopy options
 # - please do not pass in /MT and /LOG options here
 robocopy = "/Z /E /J"
+robocopy_header = "ROBOCOPY     ::     Robust File Copy for Windows"
+robocopy_footer = "Total    Copied   Skipped  Mismatch    FAILED    Extras"
+robocopy_list = "/L /E /BYTES /V /NP /FP"
+robocopy_list_footer_start = "Total"
+robocopy_list_footer_end = "Extras"

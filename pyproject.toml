@@ -6,7 +6,7 @@ authors = [
     {name = "Gemy George Kaithakottil", email = "Gemy.Kaithakottil@earlham.ac.uk"}
 ]
 readme = "README.md"
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.9,<4.0"
 license = {text = "GNU General Public License v3.0"}
 keywords = [
     "vizgen",
@@ -15,15 +15,13 @@ keywords = [
     "bioinformatics",
 ]
 dependencies = [
+    "requests>=2,<3",
+    "tomli>=2.0.1; python_version < '3.11'",
 ]
 
-[tool.poetry]
-packages = [{include = "vizgen_data_transfer", from = "src"}]
-package-mode = true
-
-[tool.poetry.scripts]
+[project.scripts]
 vizgen_data_transfer = "vizgen_data_transfer.__main__:main"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.9.16,<0.10.7"]
+build-backend = "uv_build"

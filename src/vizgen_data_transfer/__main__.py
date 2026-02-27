@@ -21,7 +21,12 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import importlib.resources
-import tomllib
+from collections import defaultdict
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 # get script name
 script = os.path.basename(sys.argv[0])
@@ -29,15 +34,41 @@ executed_command = " ".join(sys.argv)
 # add python prefix to executed command
 executed_command = "python " + executed_command
 
-default_vizgen_config = importlib.resources.files("vizgen_data_transfer.etc").joinpath(
-    ".vizgen_config.toml"
-)
+# In Windows, the default_vizgen_config is expected to be located the working directory, which can be overridden by providing the path to the config file using the --vizgen_config option.
+default_vizgen_config = str()
+if platform.system().lower() == "windows":
+    default_vizgen_config = os.path.join(os.getcwd(), ".vizgen_config.toml")
+else:
+    default_vizgen_config = importlib.resources.files(
+        "vizgen_data_transfer.etc"
+    ).joinpath(".vizgen_config.toml")
 
 logging.basicConfig(
     format="%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s",
     datefmt="%d-%b-%y %H:%M:%S",
     level=logging.DEBUG,
 )
+
+
+def get_operating_system():
+    system_name = platform.system()
+    return system_name.lower()
+
+
+def format_logger(log_file):
+    # create log directory if it does not exist
+    log_dir = os.path.dirname(log_file)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(process)d - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%d-%b-%y %H:%M:%S",
+    )
+    file_handler.setFormatter(formatter)
+    logging.getLogger().addHandler(file_handler)
+
 
 # robocopy exit codes
 # ::: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/robocopy#exit-return-codes
@@ -54,9 +85,10 @@ robocopy_exit_codes = {
 
 class VizgenDataTransfer:
     @staticmethod
-    def get_operating_system():
-        system_name = platform.system()
-        return system_name.lower()
+    def win_long_path(path):
+        if os.name == "nt":
+            return "\\\\?\\" + os.path.abspath(path)
+        return path
 
     def __init__(self, args):
         self.args = args
@@ -67,10 +99,15 @@ class VizgenDataTransfer:
         self.debug = args.debug
 
         self.store_copy_returns = dict()
+        self.store_robocopy_list_returns = defaultdict(dict)
+        self.store_count_info = defaultdict(dict)
+        self.store_robocopy_count_info = defaultdict(dict)
 
         self.analysis_drive = None
         self.isilon_drive = None
+        self.log_dir = None
         self.config = None
+
         vizgen_config = None
         if args.vizgen_config:
             vizgen_config = args.vizgen_config
@@ -79,22 +116,31 @@ class VizgenDataTransfer:
 
         # raise error if config file not found
         try:
-            assert os.path.exists(vizgen_config)
+            assert os.path.exists(str(vizgen_config))
         except AssertionError:
             logging.error(f"Error: Vizgen config file not found: {vizgen_config}")
             sys.exit(1)
 
         logging.info(f"Config file: {vizgen_config}")
 
-        with open(vizgen_config, "rb") as f:
+        with open(str(vizgen_config), "rb") as f:
             self.config = tomllib.load(f)
+
+        self.robocopy_header = self.config["tool"]["options"]["robocopy_header"]
+        self.robocopy_footer = self.config["tool"]["options"]["robocopy_footer"]
+        self.robocopy_list = self.config["tool"]["options"]["robocopy_list"]
+        self.robocopy_list_footer_start = self.config["tool"]["options"][
+            "robocopy_list_footer_start"
+        ]
+        self.robocopy_list_footer_end = self.config["tool"]["options"][
+            "robocopy_list_footer_end"
+        ]
 
         self.tool_options = None
         # detect operating system
-        self.os_name = self.get_operating_system()
+        self.os_name = get_operating_system()
         # set analysis drive and isilon drive
         if "windows" in self.os_name:
-            logging.info("Operating System: Windows")
             # set analysis Z: drive or external disk G: drive
             self.analysis_drive = (
                 self.config["analysis_drive_pc_disk"]
@@ -102,13 +148,14 @@ class VizgenDataTransfer:
                 else self.config["analysis_drive_pc"]
             )
             self.isilon_drive = self.config["isilon_drive_pc"]
+            self.log_dir = self.config["isilon_drive_logs_pc"]
             if self.debug:
                 self.analysis_drive = self.config["analysis_drive_pc_debug"]
             self.tool_options = self.config["tool"]["options"]["robocopy"]
         elif "linux" in self.os_name:
-            logging.info("Operating System: Linux")
             self.analysis_drive = self.config["analysis_drive_nix"]
             self.isilon_drive = self.config["isilon_drive_nix"]
+            self.log_dir = self.config["isilon_drive_logs_nix"]
             self.tool_options = self.config["tool"]["options"]["rsync"]
         else:
             raise ValueError("Operating System: Unknown or not currenly supported")
@@ -143,6 +190,29 @@ class VizgenDataTransfer:
             self.isilon_drive, self.run_id, "output.log"
         )
 
+        # keeps logs of raw data, analysis and output files, folders and size counts before and after transfer for each copy type to central logs folder. This is in addition to the python os.walk logs that are generated in the log files for each copy type. Only doing this for windows using robocopy.
+
+        # before transfer
+        self.isilon_log_bf_raw_data = os.path.join(
+            self.log_dir, f"{self.run_id}.raw_data.robocopy.list_before_transfer.log"
+        )
+        self.isilon_log_bf_analysis = os.path.join(
+            self.log_dir, f"{self.run_id}.analysis.robocopy.list_before_transfer.log"
+        )
+        self.isilon_log_bf_output = os.path.join(
+            self.log_dir, f"{self.run_id}.output.robocopy.list_before_transfer.log"
+        )
+        # after transfer
+        self.isilon_log_af_raw_data = os.path.join(
+            self.log_dir, f"{self.run_id}.raw_data.robocopy.list_after_transfer.log"
+        )
+        self.isilon_log_af_analysis = os.path.join(
+            self.log_dir, f"{self.run_id}.analysis.robocopy.list_after_transfer.log"
+        )
+        self.isilon_log_af_output = os.path.join(
+            self.log_dir, f"{self.run_id}.output.robocopy.list_after_transfer.log"
+        )
+
     def check_run_folders(self):
         # input folder - Z:
         # raw_data
@@ -173,6 +243,233 @@ class VizgenDataTransfer:
 
         logging.info(f"All run folders exists for run: {self.run_id}")
 
+    def get_counts_python(self, state="before"):
+        """
+        Get the count of files, folders and total size in bytes for raw_data, analysis and output folders before transfer and log that information. This information will be used to compare with the counts after transfer to check if the transfer was successful.
+        """
+        for copy_type in self.copy_type:
+            source = None
+            if copy_type == "raw_data":
+                source = (
+                    self.analysis_drive_raw_data
+                    if state == "before"
+                    else self.isilon_drive_raw_data
+                )
+            elif copy_type == "analysis":
+                source = (
+                    self.analysis_drive_analysis
+                    if state == "before"
+                    else self.isilon_drive_analysis
+                )
+            elif copy_type == "output":
+                source = (
+                    self.analysis_drive_output
+                    if state == "before"
+                    else self.isilon_drive_output
+                )
+            else:
+                logging.warning(f"Unknown copy type: {copy_type}")
+                continue
+
+            total_files = 0
+            total_folders = 0
+            total_size_bytes = 0
+            total_size_gbytes = 0
+
+            for dirpath, dirnames, filenames in os.walk(source):
+                total_folders += len(dirnames)
+                total_files += len(filenames)
+                for f in filenames:
+                    fp = self.win_long_path(os.path.join(dirpath, f))
+                    total_size_bytes += os.path.getsize(fp)
+            total_size_gbytes = float(f"{total_size_bytes / (1024 * 1024 * 1024):.3f}")
+            logging.info(f"Checking location: {source}")
+            logging.info(
+                f"{state.title()} transfer - {copy_type} - Total files: {total_files}, Total folders: {total_folders}, Total size (GB): {total_size_gbytes}, Total size (bytes): {total_size_bytes}"
+            )
+            self.store_count_info[state][copy_type] = {
+                "files": total_files,
+                "folders": total_folders,
+                "size_bytes": total_size_bytes,
+                "size_gbytes": total_size_gbytes,
+            }
+
+    def get_counts_robocopy(self, state="before"):
+        """
+        Run robocopy in list mode for locations raw_data, analysis and output locations before and after. From the end of robocopy log file for raw_data, analysis and output locations, store Total Dirs, Files, Bytes to self.store_robocopy_count_info dictionary.
+
+                       Total    Copied   Skipped  Mismatch    FAILED    Extras
+            Dirs :        32        32         0         0         0         0
+           Files :      3759      3759         0         0         0         0
+           Bytes :  35.284 g  35.284 g         0         0         0         0
+           Times :   0:00:03   0:00:00                       0:00:00   0:00:03
+           Ended : 26 February 2026 12:04:26
+
+        Get list from source
+        robocopy "Z:\source" "NULL" /L /E /BYTES /V /NP /FP /LOG+:{log_file}
+
+        Get list from destination
+        robocopy "L:\destination" "NULL" /L /E /BYTES /V /NP /FP /LOG+:{log_file}
+
+        """
+        logging.info(f"Getting robocopy list {state} transfer for run: {self.run_id}")
+        for copy_type in self.copy_type:
+            source = None
+            log_file = None
+            if copy_type == "raw_data":
+                source = (
+                    self.analysis_drive_raw_data
+                    if state == "before"
+                    else self.isilon_drive_raw_data
+                )
+                log_file = (
+                    self.isilon_log_bf_raw_data
+                    if state == "before"
+                    else self.isilon_log_af_raw_data
+                )
+            elif copy_type == "analysis":
+                source = (
+                    self.analysis_drive_analysis
+                    if state == "before"
+                    else self.isilon_drive_analysis
+                )
+                log_file = (
+                    self.isilon_log_bf_analysis
+                    if state == "before"
+                    else self.isilon_log_af_analysis
+                )
+            elif copy_type == "output":
+                source = (
+                    self.analysis_drive_output
+                    if state == "before"
+                    else self.isilon_drive_output
+                )
+                log_file = (
+                    self.isilon_log_bf_output
+                    if state == "before"
+                    else self.isilon_log_af_output
+                )
+            else:
+                logging.warning(f"Unknown copy type: {copy_type}")
+                continue
+
+            cmd = f'robocopy "{source}" "NULL" {self.robocopy_list} /MT:{self.threads} /LOG+:{log_file}'
+            logging.info(f"Command: {cmd}")
+            try:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, check=True
+                )
+                logging.info(f"STDOUT:\n{result.stdout}")
+                msg = f"Robocopy list command executed successfully for {copy_type} for run: {self.run_id} with robocopy exit code '{result.returncode}': {robocopy_exit_codes[result.returncode]}"
+                logging.info(msg)
+                self.store_robocopy_list_returns[state][copy_type] = msg
+
+            except subprocess.CalledProcessError as e:
+                logging.info(f"STDOUT:\n{e.stdout}")
+                logging.error(f"{e}")
+                logging.error(f"STDERR: {e.stderr}")
+
+                if e.returncode in robocopy_exit_codes:
+                    msg = f"Robocopy list command executed successfully for {copy_type} for run: {self.run_id} with robocopy exit code '{e.returncode}': {robocopy_exit_codes[e.returncode]}"
+                    logging.info(msg)
+                    self.store_robocopy_list_returns[state][copy_type] = msg
+                else:
+                    email_subject = (
+                        f"Vizgen data transfer failed for run: {self.run_id}"
+                    )
+                    email_content = (
+                        f"Vizgen data transfer failed for run: {self.run_id}"
+                    )
+                    error_msg = f"Error getting robocopy list for {copy_type} for run: {self.run_id}.\nExit code: '{e.returncode}'\nSTDERR: {e.stderr}\nError: {e}"
+                    email_content += f"\n\n{error_msg}"
+                    email_content += f"\n\nCommand executed:\n\n{executed_command}"
+                    self.send_email(email_subject, email_content)
+                    raise ValueError(email_content)
+
+    def check_robocopy_list_logs(self, state="before"):
+        """
+        Check the robocopy list logs for raw_data, analysis and output locations for the Total Dirs, Files, Bytes information and store that in self.store_robocopy_count_info dictionary.
+        """
+        logging.info(
+            f"Checking robocopy list logs {state} transfer for run: {self.run_id}"
+        )
+        for copy_type in self.copy_type:
+            log_file = None
+            if copy_type == "raw_data":
+                log_file = (
+                    self.isilon_log_bf_raw_data
+                    if state == "before"
+                    else self.isilon_log_af_raw_data
+                )
+            elif copy_type == "analysis":
+                log_file = (
+                    self.isilon_log_bf_analysis
+                    if state == "before"
+                    else self.isilon_log_af_analysis
+                )
+            elif copy_type == "output":
+                log_file = (
+                    self.isilon_log_bf_output
+                    if state == "before"
+                    else self.isilon_log_af_output
+                )
+            else:
+                logging.warning(f"Unknown copy type: {copy_type}")
+                continue
+
+            with open(log_file, "r") as f:
+                total_files = 0
+                total_folders = 0
+                total_size_bytes = 0
+                total_size_gbytes = 0
+                lines = f.readlines()
+                if len(lines) < 7:
+                    logging.error(
+                        f"Robocopy list log file for {copy_type} does not have enough lines to extract Total Dirs, Files, Bytes information. Log file: {log_file}"
+                    )
+                    raise ValueError(
+                        f"Robocopy list log file for {copy_type} does not have enough lines to extract Total Dirs, Files, Bytes information. Log file: {log_file}"
+                    )
+                else:
+                    # for line in lines[-7:]:
+                    # footer_format = "Total     Copied   Skipped  Mismatch    FAILED    Extras"
+
+                    # robocopy list log foot format differs between each runs
+                    # Total     Copied   Skipped  Mismatch    FAILED    Extras
+                    # Total      Copied   Skipped  Mismatch    FAILED    Extras
+                    # So only checking if line starts with "Total" and ends with "Extras" to identify the footer line
+
+                    logging.info(
+                        f"Checking 7th line from the bottom of log file: {log_file}"
+                    )
+                    logging.info(f"Required start: '{self.robocopy_list_footer_start}'")
+                    logging.info(f"Required end: '{self.robocopy_list_footer_end}'")
+                    logging.info(f"Detected: '{lines[-7].strip()}'")
+                    if lines[-7].strip().startswith(
+                        self.robocopy_list_footer_start
+                    ) and lines[-7].strip().endswith(self.robocopy_list_footer_end):
+                        # get Total Dirs, Files, Bytes
+                        # information from the next 3 lines
+                        dirs_line = lines[-6].strip()
+                        files_line = lines[-5].strip()
+                        bytes_line = lines[-4].strip()
+                        # split by whitespace and get the second element for Dirs, Files and Bytes
+                        total_folders = dirs_line.split()[2]
+                        total_files = files_line.split()[2]
+                        total_size_bytes = int(bytes_line.split()[2])
+                        total_size_gbytes = float(
+                            f"{total_size_bytes / (1024 * 1024 * 1024):.3f}"
+                        )
+                        logging.info(
+                            f"Robocopy list log {state.title()} transfer for {copy_type} - Total files: {total_files}, Total folders: {total_folders}, Total size (GB): {total_size_gbytes}, Total size (bytes): {total_size_bytes}"
+                        )
+                        self.store_robocopy_count_info[state][copy_type] = {
+                            "folders": total_folders,
+                            "files": total_files,
+                            "size_bytes": total_size_bytes,
+                            "size_gbytes": total_size_gbytes,
+                        }
+
     def copy_data(self, copy_type, source, destination, log_file):
         # robocopy command used:
         # robocopy
@@ -183,9 +480,11 @@ class VizgenDataTransfer:
         # /log+ - Writes the status output to the log file (overwrites the existing log file).
         cmd = None
         if self.os_name == "linux":
-            cmd = f"rsync {self.tool_options} --log-file={log_file} {source} {destination}"
-        if self.os_name == "windows":
-            cmd = f'robocopy "{source} " {destination} {self.tool_options} /MT:{self.threads} /LOG+:{log_file}'
+            cmd = f"rsync {self.tool_options} --log-file={log_file} {source}/* {destination}"
+        elif self.os_name == "windows":
+            cmd = f'robocopy "{source}" "{destination}" {self.tool_options} /MT:{self.threads} /LOG+:{log_file}'
+        else:
+            raise ValueError(f"Operating System: '{self.os_name}' currenly supported")
 
         logging.info(f"Command: {cmd}")
 
@@ -218,7 +517,7 @@ class VizgenDataTransfer:
                     email_content = (
                         f"Vizgen data transfer failed for run: {self.run_id}"
                     )
-                    error_msg = f"Error copying {copy_type} for run: {self.run_id}.\nExit code: '{e.returncode}'\nSTDERR: {e.stderr}Error: {e}"
+                    error_msg = f"Error copying {copy_type} for run: {self.run_id}.\nExit code: '{e.returncode}'\nSTDERR: {e.stderr}\nError: {e}"
                     email_content += f"\n\n{error_msg}"
                     email_content += f"\n\nCommand executed:\n\n{executed_command}"
                     self.send_email(email_subject, email_content)
@@ -236,7 +535,7 @@ class VizgenDataTransfer:
                     email_content = (
                         f"Vizgen data transfer failed for run: {self.run_id}"
                     )
-                    error_msg = f"Error copying {copy_type} for run: {self.run_id}.\nExit code: '{e.returncode}'\nSTDERR: {e.stderr}Error: {e}"
+                    error_msg = f"Error copying {copy_type} for run: {self.run_id}.\nExit code: '{e.returncode}'\nSTDERR: {e.stderr}\nError: {e}"
                     email_content += f"\n\n{error_msg}"
                     email_content += f"\n\nCommand executed:\n\n{executed_command}"
                     self.send_email(email_subject, email_content)
@@ -248,9 +547,9 @@ class VizgenDataTransfer:
 
         if self.os_name == "windows":
             # check if third line from the top of the log file
-            header_format = "ROBOCOPY     ::     Robust File Copy for Windows"
+            # header_format = "ROBOCOPY     ::     Robust File Copy for Windows"
             # check if 7th or 11th lines from the bottom of the log file
-            footer_format = "Total    Copied   Skipped  Mismatch    FAILED    Extras"
+            # footer_format = "Total    Copied   Skipped  Mismatch    FAILED    Extras"
 
             with open(log_file, "r") as f:
                 lines = f.readlines()
@@ -258,18 +557,18 @@ class VizgenDataTransfer:
                     logging.info(
                         f"Checking 3rd line from the top of log file: {log_file}"
                     )
-                    logging.info(f"Required: '{header_format}'")
+                    logging.info(f"Required: '{self.robocopy_header}'")
                     logging.info(f"Detected: '{lines[2].strip()}'")
-                    if header_format in lines[2].strip():
+                    if self.robocopy_header in lines[2].strip():
                         header_valid = True
                     logging.info(f"Status:{header_valid}")
                 if len(lines) > 11:
                     logging.info(
                         f"Checking 11th line from the bottom of log file: {log_file}"
                     )
-                    logging.info(f"Required: '{footer_format}'")
+                    logging.info(f"Required: '{self.robocopy_footer}'")
                     logging.info(f"Detected: '{lines[-11].strip()}'")
-                    if footer_format in lines[-11].strip():
+                    if self.robocopy_footer in lines[-11].strip():
                         footer_valid = True
                     logging.info(f"Status:{footer_valid}")
                 if not footer_valid:
@@ -277,9 +576,9 @@ class VizgenDataTransfer:
                         f"Checking 7th line from the bottom of log file: {log_file}"
                     )
                     if len(lines) > 7:
-                        logging.info(f"Required: '{footer_format}'")
+                        logging.info(f"Required: '{self.robocopy_footer}'")
                         logging.info(f"Detected: '{lines[-7].strip()}'")
-                        if footer_format in lines[-7].strip():
+                        if self.robocopy_footer in lines[-7].strip():
                             footer_valid = True
                         logging.info(f"Status:{footer_valid}")
 
@@ -294,10 +593,156 @@ class VizgenDataTransfer:
         else:
             return "NOT A COMPLETE LOG FILE. PLEASE RE-RUN THE COMMAND TO GET A COMPLETE LOG FILE."
 
-    def success_message(self):
+    def get_transfer_summary(self):
+        """
+        Get the summary of the transfer including the data locations, counts of files, folders and total size in bytes for each copy type before and after transfer, and the exit code(s) for each copy type. This information will be included in the success email sent after the transfer is complete.
+        """
+        email_content = str()
+        transfer_error = False
+        transfer_error_check_python = False
+        transfer_error_check_robocopy = False
+        # Column formatting widths
+        col1_width = 16
+        col_width = 18
+        for copy_type in self.copy_type:
+            if (
+                copy_type in self.store_count_info["before"]
+                and copy_type in self.store_count_info["after"]
+            ):
+                before_count_info = self.store_count_info["before"][copy_type]
+                after_count_info = self.store_count_info["after"][copy_type]
+
+                email_content += "\n\nData summary Python based counts:\n\n"
+                email_content += f"{copy_type.title()} Transfer Summary\n"
+                email_content += "-" * (col1_width + col_width * 4) + "\n"
+
+                # Header row
+                email_content += (
+                    f"{'Status':<{col1_width}}"
+                    f"{'Total Files':<{col_width}}"
+                    f"{'Total Folders':<{col_width}}"
+                    f"{'Total Size (GB)':<{col_width}}"
+                    f"{'Total Size (Bytes)':<{col_width}}\n"
+                )
+
+                email_content += "-" * (col1_width + col_width * 4) + "\n"
+
+                # Before row
+                email_content += (
+                    f"{'Before Transfer':<{col1_width}}"
+                    f"{before_count_info['files']:<{col_width}}"
+                    f"{before_count_info['folders']:<{col_width}}"
+                    f"{before_count_info['size_gbytes']:<{col_width}}"
+                    f"{before_count_info['size_bytes']:<{col_width}}\n"
+                )
+
+                # After row
+                email_content += (
+                    f"{'After Transfer':<{col1_width}}"
+                    f"{after_count_info['files']:<{col_width}}"
+                    f"{after_count_info['folders']:<{col_width}}"
+                    f"{after_count_info['size_gbytes']:<{col_width}}"
+                    f"{after_count_info['size_bytes']:<{col_width}}\n"
+                )
+
+                email_content += "-" * (col1_width + col_width * 4) + "\n"
+
+                # Error if mismatch, except size_bytes (but check size_gbytes) can be different due to differences in how size is calculated by os.walk and robocopy, but files, folders count and size_gbytes should be the same
+                # keeping below logic in case we need to check size_bytes
+                # if before_count_info != after_count_info:
+                if (
+                    before_count_info["files"] != after_count_info["files"]
+                    or before_count_info["folders"] != after_count_info["folders"]
+                    or before_count_info["size_gbytes"]
+                    != after_count_info["size_gbytes"]
+                ):
+                    email_content += (
+                        f"ERROR: Mismatch detected in {copy_type} counts "
+                        "between before and after transfer.\n"
+                        "Please try re-running the transfer command.\n"
+                    )
+                    logging.error(
+                        f"Mismatch in counts for {copy_type} between before and after transfer."
+                    )
+                    transfer_error_check_python = True
+
+            if self.os_name == "windows":
+                if (
+                    copy_type in self.store_robocopy_count_info["before"]
+                    and copy_type in self.store_robocopy_count_info["after"]
+                ):
+                    before_robocopy_count_info = self.store_robocopy_count_info[
+                        "before"
+                    ][copy_type]
+                    after_robocopy_count_info = self.store_robocopy_count_info["after"][
+                        copy_type
+                    ]
+
+                    email_content += "\n\nData summary Robocopy based counts:\n\n"
+                    email_content += f"{copy_type.title()} Transfer Summary\n"
+                    email_content += "-" * (col1_width + col_width * 4) + "\n"
+
+                    # Header row
+                    email_content += (
+                        f"{'Status':<{col1_width}}"
+                        f"{'Total Files':<{col_width}}"
+                        f"{'Total Folders':<{col_width}}"
+                        f"{'Total Size (GB)':<{col_width}}"
+                        f"{'Total Size (Bytes)':<{col_width}}\n"
+                    )
+
+                    email_content += "-" * (col1_width + col_width * 4) + "\n"
+
+                    # Before row
+                    email_content += (
+                        f"{'Before Transfer':<{col1_width}}"
+                        f"{before_robocopy_count_info['files']:<{col_width}}"
+                        f"{before_robocopy_count_info['folders']:<{col_width}}"
+                        f"{before_robocopy_count_info['size_gbytes']:<{col_width}}"
+                        f"{before_robocopy_count_info['size_bytes']:<{col_width}}\n"
+                    )
+
+                    # After row
+                    email_content += (
+                        f"{'After Transfer':<{col1_width}}"
+                        f"{after_robocopy_count_info['files']:<{col_width}}"
+                        f"{after_robocopy_count_info['folders']:<{col_width}}"
+                        f"{after_robocopy_count_info['size_gbytes']:<{col_width}}"
+                        f"{after_robocopy_count_info['size_bytes']:<{col_width}}\n"
+                    )
+
+                    email_content += "-" * (col1_width + col_width * 4) + "\n"
+
+                    # Error if mismatch occurs, check all values =, i.e., files, folders, size_gbytes and size_bytes should be the same between before and after transfer. During testing, robocopy counts were consistent between before and after transfer.
+                    # if (
+                    #     before_robocopy_count_info["files"]
+                    #     != after_robocopy_count_info["files"]
+                    #     or before_robocopy_count_info["folders"]
+                    #     != after_robocopy_count_info["folders"]
+                    #     or before_robocopy_count_info["size_gbytes"]
+                    #     != after_robocopy_count_info["size_gbytes"]
+                    # ):
+                    if before_robocopy_count_info != after_robocopy_count_info:
+                        email_content += (
+                            f"ERROR: Mismatch detected in {copy_type} counts "
+                            "between before and after transfer.\n"
+                            "Please try re-running the transfer command.\n"
+                        )
+                        logging.error(
+                            f"Mismatch in counts for {copy_type} between before and after transfer."
+                        )
+                        transfer_error_check_robocopy = True
+
+        if transfer_error_check_python or transfer_error_check_robocopy:
+            transfer_error = True
+
+        return email_content, transfer_error
+
+    def create_email_content(self):
         email_subject = f"Vizgen data transfer completed for run: {self.run_id}"
         email_content = f"Vizgen data transfer completed for run: {self.run_id}"
         log_content = str()
+        email_content += "\n\nData location(s):\n"
         logging.info(f"Vizgen data transfer completed for run: {self.run_id}")
         if "raw_data" in self.copy_type:
             email_content += f"\n - Raw directory: {self.isilon_drive_raw_data}"
@@ -311,13 +756,22 @@ class VizgenDataTransfer:
             email_content += f"\n - Output directory: {self.isilon_drive_output}"
             logging.info(f"Output directory: {self.isilon_drive_output}")
             log_content += f"\n - Output directory: {self.check_log_file(self.isilon_drive_output_log)}"
+
+        email_content += "\n\nData summary:"
+        summary_content, transfer_error = self.get_transfer_summary()
+        email_content += summary_content
+        if transfer_error:
+            email_subject = email_subject.replace("completed", "failed")
+            email_content = email_content.replace("completed", "failed")
+
         # Add platform-specific message
+        email_content += "\n\nExit code(s):\n"
         platform_msg = (
             "Any exit code value equal to or greater than 8 indicates that there was at least one failure during the robocopy operation."
             if self.os_name == "windows"
             else "Any non-zero exit code indicates that there was at least one failure during the rsync copy operation."
         )
-        email_content += f"\n\nNote: {platform_msg}\n"
+        email_content += f"\nNote: {platform_msg}\n"
         logging.warning(f"Note: {platform_msg}")
         if "raw_data" in self.copy_type:
             if "raw_data" in self.store_copy_returns:
@@ -340,7 +794,7 @@ class VizgenDataTransfer:
                 )
                 logging.info(f"Output directory: {self.store_copy_returns['output']}")
         if log_content:
-            email_content += f"\n\n\nLog file status:\n{log_content}"
+            email_content += f"\n\nLog file status:\n{log_content}"
 
             # change email_subject completed to failed if NOT A COMPLETE LOG FILE detected in log_content
             if "NOT A COMPLETE LOG FILE" in log_content:
@@ -351,6 +805,10 @@ class VizgenDataTransfer:
 
     def send_email(self, email_subject, email_content):
         # send email
+
+        if self.config is None:
+            logging.error("Config is not loaded. Cannot send email.")
+            return
 
         smtp_server = self.config["smtp_server"]
         sender_email = self.config["sender_email"]
@@ -379,6 +837,14 @@ class VizgenDataTransfer:
             logging.error("Email delivery failed")
 
     def transfer_run(self):
+
+        # get counts before transfer and log that information
+        self.get_counts_python(state="before")
+
+        if self.os_name == "windows":
+            self.get_counts_robocopy(state="before")
+            self.check_robocopy_list_logs(state="before")
+
         # check if run folders exist and raise error if not
         if not os.path.exists(self.isilon_drive_raw_data):
             logging.info(
@@ -450,7 +916,13 @@ class VizgenDataTransfer:
                 f"Error: Analysis output folder not found for run: {self.isilon_drive_output}. Looks like copy failed. Simply restart the command to resume copy from where it left off."
             )
 
-        self.success_message()
+        self.get_counts_python(state="after")
+
+        if self.os_name == "windows":
+            self.get_counts_robocopy(state="after")
+            self.check_robocopy_list_logs(state="after")
+
+        self.create_email_content()
 
         # output folder - F:
         # output structure
@@ -498,7 +970,7 @@ def main():
     # add threads option
     parser.add_argument(
         "--threads",
-        default=8,
+        default=1,
         help="Number of threads to use for copying",
     )
     parser.add_argument(
@@ -517,7 +989,40 @@ def main():
         help="Enable this option for debugging [default:%(default)s]",
     )
     args = parser.parse_args()
+
+    # raise error if config file not found
+    try:
+        assert os.path.exists(args.vizgen_config)
+    except AssertionError:
+        logging.error(f"Error: Vizgen config file not found: {args.vizgen_config}")
+        sys.exit(1)
+
+    with open(args.vizgen_config, "rb") as f:
+        config = tomllib.load(f)
+
+    os_name = get_operating_system()
+    # master log file
+    if "windows" in os_name:
+        log_file = os.path.join(config["isilon_drive_logs_pc"], f"{script}.log")
+        format_logger(log_file)
+    elif "linux" in os_name:
+        log_file = os.path.join(config["isilon_drive_logs_nix"], f"{script}.log")
+        format_logger(log_file)
+    else:
+        raise ValueError("Operating System: Unknown or not currenly supported")
+
+    logging.info("######################################")
+    logging.info("### VIZGEN DATA TRANSFER INITIATED ###")
+    logging.info("######################################")
+    logging.info(f"Initiate Vizgen data transfer for run: {args.run_id}")
+    logging.info(f"Operating System: {os_name.title()}")
+
     VizgenDataTransfer(args).run()
+
+    logging.info(f"Finished Vizgen data transfer for run: {args.run_id}")
+    logging.info("######################################")
+    logging.info("### VIZGEN DATA TRANSFER COMPLETED ###")
+    logging.info("######################################")
 
 
 if __name__ == "__main__":
