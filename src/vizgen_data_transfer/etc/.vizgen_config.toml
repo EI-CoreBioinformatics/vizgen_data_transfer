@@ -56,3 +56,8 @@ rsync = "-av"
 # robocopy options
 # - please do not pass in /MT and /LOG options here
 robocopy = "/Z /E /J"
+robocopy_header = "ROBOCOPY     ::     Robust File Copy for Windows"
+robocopy_footer = "Total    Copied   Skipped  Mismatch    FAILED    Extras"
+robocopy_list = "/L /E /BYTES /V /NP /FP"
+robocopy_list_footer_start = "Total"
+robocopy_list_footer_end = "Extras"
