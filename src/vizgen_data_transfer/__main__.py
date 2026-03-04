@@ -737,10 +737,10 @@ class VizgenDataTransfer:
                     f"Mismatch detected in '{copy_type}' for '{cli_metric}'! "
                     f"Before: '{before_val}', After: '{after_val}'.\n"
                     f"To bypass this error, you can use the option --ignore_{tool_name.lower()}_counts with one of the following patterns:\n"
-                    f"1. '{copy_type}:{cli_metric}' to ignore this specific check for this copy type (e.g., 'raw_data:files')\n"
-                    f"2. '{copy_type}:all' to ignore all count checks for this copy type (e.g., 'raw_data:all')\n"
-                    f"3. 'all:{cli_metric}' to ignore this specific check for all copy types (e.g., 'all:files')\n"
-                    f"4. 'all:all' to ignore all count checks for all copy types (e.g., 'all:all')\n"
+                    f"1. '{copy_type}:{cli_metric}' to ignore this specific check for this copy type\n"
+                    f"2. '{copy_type}:all' to ignore all count checks for this copy type\n"
+                    f"3. 'all:{cli_metric}' to ignore this specific check for all copy types\n"
+                    f"4. 'all:all' to ignore all count checks for all copy types\n"
                 )
                 logging.error(msg)
                 temp_email_content += f"ERROR: {msg}\n"
@@ -753,11 +753,15 @@ class VizgenDataTransfer:
                 #     f"Actual:   {after_val}\n"
                 #     f"To bypass this, use: --ignore_python_counts {copy_type}:{cli_metric}"
                 # )
-        msg = f"All enabled count checks passed for {copy_type}."
-        logging.info(msg)
-        temp_email_content += (
-            f"SUCCESS: All enabled count checks passed for '{copy_type}'."
-        )
+
+        if any(errors):
+            msg = f"One or more enabled {tool_name.title()} based count checks failed for '{copy_type}'. Please check the error messages above for details."
+            logging.error(msg)
+            temp_email_content += f"ERROR: {msg}\n"
+        else:
+            msg = f"All enabled {tool_name.title()} based count checks passed for '{copy_type}'."
+            logging.info(msg)
+            temp_email_content += f"SUCCESS: {msg}"
 
         return temp_email_content, errors
 
