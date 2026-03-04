@@ -22,11 +22,16 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import importlib.resources
 from collections import defaultdict
+import time
+from datetime import timedelta
 
 if sys.version_info >= (3, 11):
     import tomllib
 else:
     import tomli as tomllib
+
+# start time
+start_time = time.perf_counter()
 
 # get script name
 script = os.path.basename(sys.argv[0])
@@ -851,6 +856,15 @@ class VizgenDataTransfer:
                 email_subject = email_subject.replace("completed", "failed")
 
         email_content += f"\n\nCommand executed:\n\n{executed_command}"
+
+        # end time
+        end_time = time.perf_counter()
+        duration_seconds = end_time - start_time
+        readable_time = str(timedelta(seconds=round(duration_seconds)))
+        msg = f"Total execution time : {readable_time}, using {self.threads} thread(s) for run: {self.run_id}"
+        logging.info(msg)
+        email_content += f"\n\n{msg}"
+
         self.send_email(email_subject, email_content)
 
     def send_email(self, email_subject, email_content):
