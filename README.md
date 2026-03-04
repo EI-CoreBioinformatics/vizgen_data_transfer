@@ -42,7 +42,7 @@ From Linux (for testing/debugging):
 3. Clone the repository:
     ```console
     (eivdt) PS L:\> mkdir vizgen_data_transfer
-    (eivdt) PS L:\> cd .\vizgen_data_transfer\
+    (eivdt) PS L:\> cd vizgen_data_transfer
     (eivdt) PS L:\vizgen_data_transfer> git clone https://github.com/EI-CoreBioinformatics/vizgen_data_transfer.git src
     (eivdt) PS L:\vizgen_data_transfer> cd src
     (eivdt) PS L:\vizgen_data_transfer\src> git checkout tags/v0.1.0
@@ -58,8 +58,10 @@ From Linux (for testing/debugging):
     ```console
 
     (eivdt) PS L:\> vizgen_data_transfer -h
-    usage: vizgen_data_transfer.exe [-h] [--copy_type COPY_TYPE [COPY_TYPE ...]] [--threads THREADS] [--disk]
-                                    [--vizgen_config VIZGEN_CONFIG] [--debug]
+    usage: vizgen_data_transfer.exe [-h] [--copy_type COPY_TYPE [COPY_TYPE ...]] [--threads THREADS]
+                                    [--ignore_python_counts IGNORE_PYTHON_COUNTS [IGNORE_PYTHON_COUNTS ...]]
+                                    [--ignore_robocopy_counts IGNORE_ROBOCOPY_COUNTS [IGNORE_ROBOCOPY_COUNTS ...]]
+                                    [--disk] [--vizgen_config VIZGEN_CONFIG] [--debug]
                                     run_id
 
             Script for Vizgen data transfer
@@ -72,7 +74,11 @@ From Linux (for testing/debugging):
     -h, --help            show this help message and exit
     --copy_type COPY_TYPE [COPY_TYPE ...]
                             Provide copy type, for example: raw_data, analysis, output (default: ['raw_data', 'analysis', 'output'])
-    --threads THREADS     Number of threads to use for copying (default: 8)
+    --threads THREADS     Number of threads to use for copying (default: 1)
+    --ignore_python_counts IGNORE_PYTHON_COUNTS [IGNORE_PYTHON_COUNTS ...]
+                            Ignore specific counts. Format: 'type:metric'. Types: raw_data, analysis, output, or 'all'. Metrics: files, folders, bytes, gigabytes, or 'all'. Example: '--ignore_python_counts raw_data:files analysis:all all:bytes' to ignore python based count mismatch check for 'files' metric for 'raw_data' copy type, all metrics for 'analysis' copy type and 'bytes' metric for all copy types. (default: [])
+    --ignore_robocopy_counts IGNORE_ROBOCOPY_COUNTS [IGNORE_ROBOCOPY_COUNTS ...]
+                            Ignore specific counts. Format: 'type:metric'. Types: raw_data, analysis, output, or 'all'. Metrics: files, folders, bytes, gigabytes, or 'all'. Example: '--ignore_robocopy_counts raw_data:files analysis:all all:bytes' to ignore robocopy based count mismatch check for 'files' metric for 'raw_data' copy type, all metrics for 'analysis' copy type and 'bytes' metric for all copy types. (default: [])
     --disk                Enable this option if run has to be copied from the Windows external Hard disk 'G:\Vizgen data Z drive' instead of the default Z: Drive on the analysis machine [default:False]
     --vizgen_config VIZGEN_CONFIG
                             Path to vizgen config file [default:L:\.vizgen_config.toml]
