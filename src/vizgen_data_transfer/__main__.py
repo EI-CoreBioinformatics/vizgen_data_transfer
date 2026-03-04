@@ -118,10 +118,6 @@ class VizgenDataTransfer:
         self.args = args
         self.run_id = args.run_id
         self.copy_type = [x.strip().lower() for x in args.copy_type]
-        # self.ignore_python_count = args.ignore_python_count
-        # self.ignore_python_count_type = args.ignore_python_count_type
-        # self.ignore_robocopy_count = args.ignore_robocopy_count
-        # self.ignore_robocopy_count_type = args.ignore_robocopy_count_type
         self.threads = args.threads
         self.disk = args.disk
         self.debug = args.debug
@@ -637,9 +633,6 @@ class VizgenDataTransfer:
             else self.store_robocopy_count_info["after"].get(copy_type, {})
         )
         if before and after:
-            # before_count_info = self.store_python_count_info["before"][copy_type]
-            # after_count_info = self.store_python_count_info["after"][copy_type]
-
             email_content += f"\n\nData summary {tool_name.title()} based counts:\n\n"
             email_content += f"{copy_type.title()} Transfer Summary\n"
             email_content += "-" * (col1_width + col_width * 4) + "\n"
@@ -681,47 +674,6 @@ class VizgenDataTransfer:
             )
             return str()
 
-    # def check_ignore_count_options(self, copy_type):
-    #     """
-    #     Check if user has chosen to ignore python based count mismatch check for raw_data, analysis or output using the options --ignore_python_count and --ignore_python_count_type. If user has chosen to ignore python based count mismatch check for a copy type, then log that information and do not apply the python based count mismatch check on that copy type.
-    #     """
-    #     # Check if this specific copy_type (raw_data, analysis, etc.) should be ignored entirely
-    #     if copy_type in self.args.ignore_python_count_type:
-    #         # print(f"Skipping all count checks for copy_type: {copy_type}")
-    #         # return
-    #         msg = f"User has chosen to ignore python based count mismatch check for '{copy_type}' using the option --ignore_python_count_type. Hence not checking for mismatch in python based counts between before and after transfer for '{copy_type}'."
-    #         logging.info(msg)
-    #         return (f"WARNING: {msg}", False)
-
-    #     # Map the CLI choice names to internal dictionary keys
-    #     # This allows for a clean loop rather than multiple if/else blocks
-    #     check_map = {
-    #         "folders": "folders",
-    #         "files": "files",
-    #         "bytes": "size_bytes",
-    #         "gigabytes": "size_gbytes"
-    #     }
-
-    #     before = self.store_python_count_info["before"].get(copy_type, {})
-    #     after = self.store_python_count_info["after"].get(copy_type, {})
-
-    #     for cli_name, dict_key in check_map.items():
-    #         # Skip if the user added this category to --ignore_python_count
-    #         if cli_name in self.args.ignore_python_count:
-    #             msg = f"User has chosen to ignore python based count mismatch check for '{cli_name}' using the option --ignore_python_count. Hence not checking for mismatch in python based '{cli_name}' counts between before and after transfer for '{copy_type}'."
-    #             logging.info(msg)
-    #             continue
-
-    #         before_val = before.get(dict_key)
-    #         after_val = after.get(dict_key)
-
-    #         # 4. Perform the mismatch check
-    #         if before_val != after_val:
-    #             raise ValueError(
-    #                 f"Mismatch detected in {copy_type} for {cli_name}! "
-    #                 f"Before: {before_val}, After: {after_val}"
-    #             )
-
     def check_ignore_count_options(self, copy_type, tool_name):
 
         temp_email_content = str()
@@ -735,9 +687,6 @@ class VizgenDataTransfer:
         }
 
         # Get data for the specific copy_type (raw_data, analysis, or output)
-        # before = self.store_python_count_info["before"].get(copy_type, {})
-        # after = self.store_python_count_info["after"].get(copy_type, {})
-
         before = (
             self.store_python_count_info["before"].get(copy_type, {})
             if tool_name.lower() == "python"
@@ -805,7 +754,6 @@ class VizgenDataTransfer:
             f"SUCCESS: All enabled count checks passed for '{copy_type}'."
         )
 
-        # print(f"Success: All enabled checks passed for {copy_type}.")
         return temp_email_content, errors
 
     def get_transfer_summary(self):
@@ -815,98 +763,15 @@ class VizgenDataTransfer:
         email_content = str()
         transfer_error = False
         transfer_errors = list()
-        # transfer_error_check_python = False
-        # transfer_error_check_robocopy = False
         for copy_type in self.copy_type:
             email_content += self.get_stats_for_transfer_summary(
                 copy_type=copy_type, tool_name="python"
             )
-            # if (
-            #     copy_type in self.store_python_count_info["before"]
-            #     and copy_type in self.store_python_count_info["after"]
-            # ):
-            #     before_count_info = self.store_python_count_info["before"][copy_type]
-            #     after_count_info = self.store_python_count_info["after"][copy_type]
-
-            #     email_content += "\n\nData summary Python based counts:\n\n"
-            #     email_content += f"{copy_type.title()} Transfer Summary\n"
-            #     email_content += "-" * (col1_width + col_width * 4) + "\n"
-
-            #     # Header row
-            #     email_content += (
-            #         f"{'Status':<{col1_width}}"
-            #         f"{'Total Files':<{col_width}}"
-            #         f"{'Total Folders':<{col_width}}"
-            #         f"{'Total Size (GB)':<{col_width}}"
-            #         f"{'Total Size (Bytes)':<{col_width}}\n"
-            #     )
-
-            #     email_content += "-" * (col1_width + col_width * 4) + "\n"
-
-            #     # Before row
-            #     email_content += (
-            #         f"{'Before Transfer':<{col1_width}}"
-            #         f"{before_count_info['files']:<{col_width}}"
-            #         f"{before_count_info['folders']:<{col_width}}"
-            #         f"{before_count_info['size_gbytes']:<{col_width}}"
-            #         f"{before_count_info['size_bytes']:<{col_width}}\n"
-            #     )
-
-            #     # After row
-            #     email_content += (
-            #         f"{'After Transfer':<{col1_width}}"
-            #         f"{after_count_info['files']:<{col_width}}"
-            #         f"{after_count_info['folders']:<{col_width}}"
-            #         f"{after_count_info['size_gbytes']:<{col_width}}"
-            #         f"{after_count_info['size_bytes']:<{col_width}}\n"
-            #     )
-
-            #     email_content += "-" * (col1_width + col_width * 4) + "\n"
-
-            # Error if mismatch, except size_bytes (but check size_gbytes) can be different due to differences in how size is calculated by os.walk and robocopy, but files, folders count and size_gbytes should be the same
-            # keeping below logic in case we need to check size_bytes
-            # if before_count_info != after_count_info:
-
-            # apply python based counts mismatch check on raw_data, analysis or output only if user has not chosen to ignore python count check using self.ignore_python_count and self.ignore_python_count_type options. During testing, python based counts were consistent between before and after transfer.
-
             temp_email_content, error = self.check_ignore_count_options(
                 copy_type=copy_type, tool_name="python"
             )
             email_content += temp_email_content
             transfer_errors.extend(error)
-
-            # if not self.ignore_python_count:
-            #     if self.ignore_python_count_type:
-            #         if copy_type in self.ignore_python_count_type:
-            #             logging.info(
-            #                 f"User has chosen to ignore python based count mismatch check for '{copy_type}' using the options --ignore_python_count and --ignore_python_count_type. Hence not checking for mismatch in python based counts between before and after transfer for {copy_type}."
-            #             )
-            #         else:
-            #             if before_count_info != after_count_info:
-            #                 email_content += (
-            #                     f"ERROR: Mismatch detected in {copy_type} counts "
-            #                     "between before and after transfer.\n"
-            #                     "Please try re-running the transfer command.\n"
-            #                 )
-            #                 logging.error(
-            #                     f"Mismatch in counts for {copy_type} between before and after transfer."
-            #                 )
-            #                 transfer_error_check_python = True
-            #     else:
-            #         if before_count_info != after_count_info:
-            #             email_content += (
-            #                 f"ERROR: Mismatch detected in {copy_type} counts "
-            #                 "between before and after transfer.\n"
-            #                 "Please try re-running the transfer command.\n"
-            #             )
-            #             logging.error(
-            #                 f"Mismatch in counts for {copy_type} between before and after transfer."
-            #             )
-            #             transfer_error_check_python = True
-            # else:
-            #     logging.info(
-            #         f"User has chosen to ignore python based count mismatch check for all copy types using the option --ignore_python_count. Hence not checking for mismatch in python based counts between before and after transfer for {copy_type}."
-            #     )
 
             if self.os_name == "windows":
                 email_content += self.get_stats_for_transfer_summary(
@@ -917,79 +782,6 @@ class VizgenDataTransfer:
                 )
                 email_content += temp_email_content
                 transfer_errors.extend(error)
-                # if (
-                #     copy_type in self.store_robocopy_count_info["before"]
-                #     and copy_type in self.store_robocopy_count_info["after"]
-                # ):
-                #     before_robocopy_count_info = self.store_robocopy_count_info[
-                #         "before"
-                #     ][copy_type]
-                #     after_robocopy_count_info = self.store_robocopy_count_info["after"][
-                #         copy_type
-                #     ]
-
-                #     email_content += "\n\nData summary Robocopy based counts:\n\n"
-                #     email_content += f"{copy_type.title()} Transfer Summary\n"
-                #     email_content += "-" * (col1_width + col_width * 4) + "\n"
-
-                #     # Header row
-                #     email_content += (
-                #         f"{'Status':<{col1_width}}"
-                #         f"{'Total Files':<{col_width}}"
-                #         f"{'Total Folders':<{col_width}}"
-                #         f"{'Total Size (GB)':<{col_width}}"
-                #         f"{'Total Size (Bytes)':<{col_width}}\n"
-                #     )
-
-                #     email_content += "-" * (col1_width + col_width * 4) + "\n"
-
-                #     # Before row
-                #     email_content += (
-                #         f"{'Before Transfer':<{col1_width}}"
-                #         f"{before_robocopy_count_info['files']:<{col_width}}"
-                #         f"{before_robocopy_count_info['folders']:<{col_width}}"
-                #         f"{before_robocopy_count_info['size_gbytes']:<{col_width}}"
-                #         f"{before_robocopy_count_info['size_bytes']:<{col_width}}\n"
-                #     )
-
-                #     # After row
-                #     email_content += (
-                #         f"{'After Transfer':<{col1_width}}"
-                #         f"{after_robocopy_count_info['files']:<{col_width}}"
-                #         f"{after_robocopy_count_info['folders']:<{col_width}}"
-                #         f"{after_robocopy_count_info['size_gbytes']:<{col_width}}"
-                #         f"{after_robocopy_count_info['size_bytes']:<{col_width}}\n"
-                #     )
-
-                #     email_content += "-" * (col1_width + col_width * 4) + "\n"
-
-                # Error if mismatch occurs, check all values =, i.e., files, folders, size_gbytes and size_bytes should be the same between before and after transfer. During testing, robocopy counts were consistent between before and after transfer.
-                # if (
-                #     before_robocopy_count_info["files"]
-                #     != after_robocopy_count_info["files"]
-                #     or before_robocopy_count_info["folders"]
-                #     != after_robocopy_count_info["folders"]
-                #     or before_robocopy_count_info["size_gbytes"]
-                #     != after_robocopy_count_info["size_gbytes"]
-                # ):
-
-                # if before_robocopy_count_info != after_robocopy_count_info:
-                #     email_content += (
-                #         f"ERROR: Mismatch detected in {copy_type} counts "
-                #         "between before and after transfer.\n"
-                #         "Please try re-running the transfer command.\n"
-                #     )
-                #     logging.error(
-                #         f"Mismatch in counts for {copy_type} between before and after transfer."
-                #     )
-                #     transfer_error_check_robocopy = True
-
-        # if transfer_error_check_python or transfer_error_check_robocopy:
-        # if (
-        #     any(transfer_errors)
-        #     or transfer_error_check_python
-        #     or transfer_error_check_robocopy
-        # ):
 
         if any(transfer_errors):
             transfer_error = True
@@ -1232,28 +1024,6 @@ def main():
         help="Number of threads to use for copying",
     )
     # add choices for python and robocopy, whether to ignore folder, files, bytes or gigabytes count during the check before and after transfer so that users can ignore the count check if they want to, for example, if there is a difference in how size is calculated between os.walk and robocopy which can lead to differences in size_bytes count but files, folders and size_gbytes count are the same between before and after transfer, then users can choose to ignore the bytes count check and only check files, folders and size_gbytes count
-
-    # parser.add_argument(
-    #     "--ignore_python_count",
-    #     nargs="+",
-    #     default=[],
-    #     choices=[
-    #         "folders",
-    #         "files",
-    #         "gigabytes",
-    #         "bytes",
-    #     ],
-    #     help="Ignore python count check for specified categories (folders, files, bytes, gigabytes). Default is to check all categories and raise error if any mismatch detected between before and after transfer counts.",
-    # )
-    # # add the ignore type, raw_data, analysis, output for python
-    # parser.add_argument(
-    #     "--ignore_python_count_type",
-    #     nargs="+",
-    #     default=[],
-    #     choices=["raw_data", "analysis", "output"],
-    #     help="Ignore python count check for specified copy type(s) (raw_data, analysis, output). Default is to check all copy types and raise error if any mismatch detected between before and after transfer counts.",
-    # )
-
     parser.add_argument(
         "--ignore_python_counts",
         nargs="+",
@@ -1263,7 +1033,7 @@ def main():
             "Ignore specific counts. Format: 'type:metric'. "
             "Types: raw_data, analysis, output, or 'all'. "
             "Metrics: files, folders, bytes, gigabytes, or 'all'. "
-            "Example: --ignore_python_counts raw_data:files analysis:all all:bytes"
+            "Example: '--ignore_python_counts raw_data:files analysis:all all:bytes' to ignore python based count mismatch check for 'files' metric for 'raw_data' copy type, all metrics for 'analysis' copy type and 'bytes' metric for all copy types."
         ),
     )
     parser.add_argument(
@@ -1275,32 +1045,9 @@ def main():
             "Ignore specific counts. Format: 'type:metric'. "
             "Types: raw_data, analysis, output, or 'all'. "
             "Metrics: files, folders, bytes, gigabytes, or 'all'. "
-            "Example: --ignore_robocopy_counts raw_data:files analysis:all all:bytes"
+            "Example: '--ignore_robocopy_counts raw_data:files analysis:all all:bytes' to ignore robocopy based count mismatch check for 'files' metric for 'raw_data' copy type, all metrics for 'analysis' copy type and 'bytes' metric for all copy types."
         ),
     )
-    # add same option for robocopy counts
-
-    # parser.add_argument(
-    #     "--ignore_robocopy_count",
-    #     nargs="+",
-    #     default=[],
-    #     choices=[
-    #         "folders",
-    #         "files",
-    #         "gigabytes",
-    #         "bytes",
-    #     ],
-    #     help="Ignore robocopy count check for specified categories (folders, files, bytes, gigabytes). Default is to check all categories and raise error if any mismatch detected between before and after transfer counts.",
-    # )
-    # # add the ignore type, raw_data, analysis, output for robocopy
-    # parser.add_argument(
-    #     "--ignore_robocopy_count_type",
-    #     nargs="+",
-    #     default=[],
-    #     choices=["raw_data", "analysis", "output"],
-    #     help="Ignore robocopy count check for specified copy type(s) (raw_data, analysis, output). Default is to check all copy types and raise error if any mismatch detected between before and after transfer counts.",
-    # )
-
     parser.add_argument(
         "--disk",
         action="store_true",
