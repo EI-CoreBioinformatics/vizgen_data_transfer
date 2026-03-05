@@ -736,6 +736,7 @@ class VizgenDataTransfer:
                 msg = (
                     f"Mismatch detected in '{copy_type}' for '{cli_metric}'! "
                     f"Before: '{before_val}', After: '{after_val}'.\n"
+                    f"Try resuming the transfer first to see if the counts match after resuming.\n"
                     f"To bypass this error, you can use the option --ignore_{tool_name.lower()}_counts with one of the following patterns:\n"
                     f"1. '{copy_type}:{cli_metric}' to ignore this specific check for this copy type\n"
                     f"2. '{copy_type}:all' to ignore all count checks for this copy type\n"
@@ -867,7 +868,7 @@ class VizgenDataTransfer:
         readable_time = str(timedelta(seconds=round(duration_seconds)))
         msg = f"Total execution time : {readable_time}, using {self.threads} thread(s) for run: {self.run_id}"
         logging.info(msg)
-        email_content += f"\n\n{msg}"
+        email_content += f"\n\n{msg}\n\n"
 
         self.send_email(email_subject, email_content)
 
