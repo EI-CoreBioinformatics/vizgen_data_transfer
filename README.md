@@ -291,6 +291,7 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Before Transfer 8042              11                838.861           900719884237     
     After Transfer  8042              11                838.861           900719884237     
     ----------------------------------------------------------------------------------------
+    SUCCESS: All enabled Python based count checks passed for 'raw_data'.
 
 
     Data summary Robocopy based counts:
@@ -302,6 +303,7 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Before Transfer 8042              12                838.861           900719884237     
     After Transfer  8042              12                838.861           900719884237     
     ----------------------------------------------------------------------------------------
+    SUCCESS: All enabled Robocopy based count checks passed for 'raw_data'.
 
 
     Data summary Python based counts:
@@ -313,6 +315,7 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Before Transfer 123787            1567              845.673           908034287581     
     After Transfer  123787            1567              845.673           908034287581     
     ----------------------------------------------------------------------------------------
+    SUCCESS: All enabled Python based count checks passed for 'analysis'.
 
 
     Data summary Robocopy based counts:
@@ -324,6 +327,7 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Before Transfer 123787            1568              845.673           908034287581     
     After Transfer  123787            1568              845.673           908034287581     
     ----------------------------------------------------------------------------------------
+    SUCCESS: All enabled Robocopy based count checks passed for 'analysis'.
 
 
     Data summary Python based counts:
@@ -335,6 +339,7 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Before Transfer 43                4                 108.551           116555448991     
     After Transfer  43                4                 108.551           116555448991     
     ----------------------------------------------------------------------------------------
+    SUCCESS: All enabled Python based count checks passed for 'output'.
 
 
     Data summary Robocopy based counts:
@@ -346,6 +351,7 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Before Transfer 43                5                 108.551           116555448991     
     After Transfer  43                5                 108.551           116555448991     
     ----------------------------------------------------------------------------------------
+    SUCCESS: All enabled Robocopy based count checks passed for 'output'.
 
 
     Exit code(s):
@@ -365,6 +371,8 @@ Below are the steps to transfer Vizgen run data from the Analysis Network Drive 
     Command executed:
 
     python L:\eivdt\Scripts\vizgen_data_transfer.exe 202310261058_VZGEN1_VMSC10202
+
+    Total execution time : 23:07:08, using 1 thread(s) for run: 202310261058_VZGEN1_VMSC10202
     ```
 
 
