@@ -45,12 +45,12 @@ From Linux (for testing/debugging):
     (eivdt) PS L:\> cd vizgen_data_transfer
     (eivdt) PS L:\vizgen_data_transfer> git clone https://github.com/EI-CoreBioinformatics/vizgen_data_transfer.git src
     (eivdt) PS L:\vizgen_data_transfer> cd src
-    (eivdt) PS L:\vizgen_data_transfer\src> git checkout tags/v0.1.0
+    (eivdt) PS L:\vizgen_data_transfer\src> git checkout tags/v1.0.0
     ```
 4. Build and install using UV:
     ```console
     (eivdt) PS L:\vizgen_data_transfer\src> uv build
-    (eivdt) PS L:\vizgen_data_transfer\src> pip install --force-reinstall -U .\dist\vizgen_data_transfer-0.1.0-py3-none-any.whl
+    (eivdt) PS L:\vizgen_data_transfer\src> pip install --force-reinstall -U .\dist\vizgen_data_transfer-1.0.0-py3-none-any.whl
     ```
 
 5. Run the script:
@@ -112,11 +112,11 @@ vizgen_data_transfer --vizgen_config L:\config_files\.vizgen_config.toml 2023102
     ```console
     git clone https://github.com/EI-CoreBioinformatics/vizgen_data_transfer.git
     cd vizgen_data_transfer
-    git checkout tags/v0.1.0
+    git checkout tags/v1.0.0
     ```
 2. Build and install using [UV](https://docs.astral.sh/uv/):
     ```console
-    version=0.1.0
+    version=1.0.0
     uv build
     pip install --prefix=/path/to/vizgen_data_transfer/${version}/x86_64 -U dist/*whl
     ```

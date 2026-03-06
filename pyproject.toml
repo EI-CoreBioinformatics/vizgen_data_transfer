@@ -1,6 +1,6 @@
 [project]
 name = "vizgen_data_transfer"
-version = "0.1.0"
+version = "1.0.0"
 description = "Vizgen Data Transfer"
 authors = [
     {name = "Gemy George Kaithakottil", email = "Gemy.Kaithakottil@earlham.ac.uk"}
