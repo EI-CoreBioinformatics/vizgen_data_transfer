@@ -465,6 +465,207 @@ L:RUN_FOLDER/
 └── output      - Transferred from External Hard Disk
 ```
 
+## Troubleshooting
+
+### Example 1
+
+Some data transfer jobs may fail due to mismatches detected during the post-transfer validation stage. The `vizgen_data_transfer` script performs validation using two independent counting mechanisms: Python-based directory traversal counts and Robocopy-based counts. These checks compare the number of files, folders, and total data size between the source and destination locations. If any discrepancies are detected, the script will report an error and stop the process to prevent incomplete or corrupted transfers.
+
+In some situations, the Python-based counts may show a small discrepancy in the `bytes` counts between the source and the destination, while the Robocopy counts show that the values match correctly. This can occasionally occur due to differences in how the counts are calculated or due to minor metadata differences encountered during directory traversal. When the Robocopy counts match but the Python byte counts differ slightly, it is generally safe to ignore the Python-based byte check and proceed with the transfer by explicitly instructing the script to ignore that specific validation check.
+
+Below is an example where the Python-based `bytes` counts differ between the source and destination, while the Robocopy-based counts match correctly.
+
+Python-based error example:
+```console
+Data summary Python based counts:
+
+Raw_Data Transfer Summary
+----------------------------------------------------------------------------------------
+Status          Total Files       Total Folders     Total Size (GB)   Total Size (Bytes)
+----------------------------------------------------------------------------------------
+Before Transfer 4298              28                72.279            77609211017      
+After Transfer  4298              28                72.279            77609213418      
+----------------------------------------------------------------------------------------
+ERROR: Mismatch detected in 'raw_data' for 'bytes'! Before: '77609211017', After: '77609213418'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_python_counts with one of the following patterns:
+1. 'raw_data:bytes' to ignore this specific check for this copy type
+2. 'raw_data:all' to ignore all count checks for this copy type
+3. 'all:bytes' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: One or more enabled Python based count checks failed for 'raw_data'. Please check the error messages above for details.
+```
+
+Robocopy-based validation for the same transfer shows that the counts match correctly:
+
+```console
+Data summary Robocopy based counts:
+
+Raw_Data Transfer Summary
+----------------------------------------------------------------------------------------
+Status          Total Files       Total Folders     Total Size (GB)   Total Size (Bytes)
+----------------------------------------------------------------------------------------
+Before Transfer 4298              29                72.279            77609213418      
+After Transfer  4298              29                72.279            77609213418      
+----------------------------------------------------------------------------------------
+SUCCESS: All enabled Robocopy based count checks passed for 'raw_data'.
+```
+
+
+In this situation, the Python `bytes` count mismatch can be ignored because the Robocopy validation confirms that the transfer was successful. To bypass this specific Python-based validation check, the transfer command can be executed using the `--ignore_python_counts raw_data:bytes` option. It is important to include `--` before the `run_id` argument so that the command-line parser correctly separates options from the positional run identifier.
+
+Example command:
+```console
+vizgen_data_transfer –ignore_python_counts raw_data:bytes -– 202310261058_VZGEN1_VMSC10202
+```
+
+
+### Example 2
+
+A different situation can occur when both the Python-based validation and the Robocopy validation report mismatches for multiple metrics such as `files`, `folders`, `bytes`, and `gigabytes`. This typically indicates that the transfer was interrupted or incomplete. In such cases, the recommended first step is simply to resume the transfer by re-running the same command used previously. The script will continue copying any missing files.
+
+Below is an example where both Python and Robocopy counts differ significantly between the source and destination.
+
+Python-based validation error:
+
+```console
+Data summary Python based counts:
+
+Analysis Transfer Summary
+----------------------------------------------------------------------------------------
+Status          Total Files       Total Folders     Total Size (GB)   Total Size (Bytes)
+----------------------------------------------------------------------------------------
+Before Transfer 61583             76                80.022            85923232633      
+After Transfer  12540             56                75.019            80551560778      
+----------------------------------------------------------------------------------------
+ERROR: Mismatch detected in 'analysis' for 'folders'! Before: '76', After: '56'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_python_counts with one of the following patterns:
+1. 'analysis:folders' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:folders' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: Mismatch detected in 'analysis' for 'files'! Before: '61583', After: '12540'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_python_counts with one of the following patterns:
+1. 'analysis:files' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:files' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: Mismatch detected in 'analysis' for 'bytes'! Before: '85923232633', After: '80551560778'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_python_counts with one of the following patterns:
+1. 'analysis:bytes' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:bytes' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: Mismatch detected in 'analysis' for 'gigabytes'! Before: '80.022', After: '75.019'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_python_counts with one of the following patterns:
+1. 'analysis:gigabytes' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:gigabytes' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: One or more enabled Python based count checks failed for 'analysis'. Please check the error messages above for details.
+```
+
+
+Robocopy validation error:
+
+```console
+Data summary Robocopy based counts:
+
+Analysis Transfer Summary
+----------------------------------------------------------------------------------------
+Status          Total Files       Total Folders     Total Size (GB)   Total Size (Bytes)
+----------------------------------------------------------------------------------------
+Before Transfer 61583             77                80.022            85923232633      
+After Transfer  12540             57                75.019            80551560778      
+----------------------------------------------------------------------------------------
+ERROR: Mismatch detected in 'analysis' for 'folders'! Before: '77', After: '57'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_robocopy_counts with one of the following patterns:
+1. 'analysis:folders' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:folders' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: Mismatch detected in 'analysis' for 'files'! Before: '61583', After: '12540'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_robocopy_counts with one of the following patterns:
+1. 'analysis:files' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:files' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: Mismatch detected in 'analysis' for 'bytes'! Before: '85923232633', After: '80551560778'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_robocopy_counts with one of the following patterns:
+1. 'analysis:bytes' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:bytes' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: Mismatch detected in 'analysis' for 'gigabytes'! Before: '80.022', After: '75.019'.
+Try resuming the transfer first to see if the counts match after resuming.
+To bypass this error, you can use the option --ignore_robocopy_counts with one of the following patterns:
+1. 'analysis:gigabytes' to ignore this specific check for this copy type
+2. 'analysis:all' to ignore all count checks for this copy type
+3. 'all:gigabytes' to ignore this specific check for all copy types
+4. 'all:all' to ignore all count checks for all copy types
+
+ERROR: One or more enabled Robocopy based count checks failed for 'analysis'. Please check the error messages above for details.
+```
+
+
+In this situation, the correct approach is to **resume the transfer first** and allow the script to copy any remaining files. This can be done by simply running the standard command again:
+```console
+vizgen_data_transfer 202310261058_VZGEN1_VMSC10202
+```
+
+
+After resuming, the transfer should complete and the counts should match. However, if the resume operation still reports small discrepancies that are known to be safe to ignore, the script provides options to selectively disable specific validation checks. These checks can be disabled separately for Python-based validation and Robocopy-based validation.
+
+For example, if the resumed transfer shows discrepancies in Python-based `files` and `bytes` counts for the `raw_data` location and Robocopy-based `folders` and `bytes` counts for the `analysis` location, and it is confirmed by **manual checks** that these mismatches are safe to ignore, the command can be executed with explicit ignore options.
+
+Example command:
+
+```console
+vizgen_data_transfer 
+	--ignore_python_counts raw_data:files raw_data:bytes
+	--ignore_robocopy_counts analysis:folders analysis:bytes
+	-- 202310261058_VZGEN1_VMSC10202
+```
+
+The `--` separator before the `run_id` is required so that the command-line parser correctly distinguishes between option arguments and the positional run identifier.
+
+Whenever validation checks are ignored using either `--ignore_python_counts` or `--ignore_robocopy_counts`, the script records this action and includes a warning in the email notification sent after the transfer completes. This ensures that there is a clear audit trail showing which checks were bypassed during the process.
+
+For example, if the command below is used to ignore the Python byte check:
+
+```console
+vizgen_data_transfer.exe --ignore_python_counts raw_data:bytes -- 202310261058_VZGEN1_VMSC10202
+```
+
+The notification email will include a warning similar to the following:
+```console
+Raw_Data Transfer Summary
+----------------------------------------------------------------------------------------
+Status          Total Files       Total Folders     Total Size (GB)   Total Size (Bytes)
+----------------------------------------------------------------------------------------
+Before Transfer 4298              28                72.279            77609211017      
+After Transfer  4298              28                72.279            77609213418      
+----------------------------------------------------------------------------------------
+WARNING: User has chosen to ignore python based count mismatch check for 'bytes' metric for 'raw_data' copy type using the option --ignore_python_counts. Hence not checking for mismatch in python based 'bytes' counts between before and after transfer for 'raw_data'.
+SUCCESS: All enabled Python based count checks passed for 'raw_data'.
+```
+
+This warning confirms that the mismatch check was intentionally skipped and provides a record of the exact override used during the transfer process.
 
 ## Contributing
 
